@@ -18,11 +18,16 @@ export interface CreateBindingParams {
   createdBy: string;
 }
 
+function normalizeAddress(emailAddress: string): string {
+  return emailAddress.trim().toLowerCase();
+}
+
 export async function createBinding(db: Db, params: CreateBindingParams): Promise<Binding> {
   const createdAt = new Date().toISOString();
+  // SQLite's `eq` on TEXT is case-sensitive, so store addresses in a single canonical case.
   const rows = await db
     .insert(addressBindings)
-    .values({ ...params, createdAt })
+    .values({ ...params, emailAddress: normalizeAddress(params.emailAddress), createdAt })
     .returning();
   return rows[0] as Binding;
 }
@@ -55,7 +60,7 @@ export async function resolveBindingByAddress(db: Db, emailAddress: string): Pro
   const rows = await db
     .select()
     .from(addressBindings)
-    .where(eq(addressBindings.emailAddress, emailAddress))
+    .where(eq(addressBindings.emailAddress, normalizeAddress(emailAddress)))
     .limit(1);
   return (rows[0] as Binding) ?? null;
 }

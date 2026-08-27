@@ -1,0 +1,18 @@
+# Host build output and dependencies must never enter the image: `npm ci` runs inside the
+# build stage, and host node_modules carry native bindings compiled for the host platform.
+node_modules
+dist
+
+# Secrets and local state
+.env
+.env.*
+data
+
+# Repo/tooling noise
+.git
+.gitignore
+.superpowers
+.claude
+docs
+tests
+*.md

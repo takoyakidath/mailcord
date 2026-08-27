@@ -19,6 +19,10 @@ export interface ReceivedEmail {
   emailId: string;
   from: string;
   to: string[];
+  /** Envelope recipients Resend actually delivered to; can differ from `to` (BCC, alias, list mail). */
+  receivedFor: string[];
+  /** The message's real RFC-5322 Message-ID, as a first-class SDK field. */
+  messageId: string;
   subject: string;
   text: string;
   html: string;
@@ -70,6 +74,8 @@ export function createResendClient(apiKey: string): ResendClient {
         emailId: data!.id,
         from: data!.from,
         to: data!.to,
+        receivedFor: data!.received_for ?? [],
+        messageId: data!.message_id ?? '',
         subject: data!.subject,
         text: data!.text ?? '',
         html: data!.html ?? '',

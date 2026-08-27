@@ -30,6 +30,19 @@ describe('bindingService', () => {
     expect(byAddress?.discordChannelId).toBe('chan-1');
   });
 
+  it('stores and resolves addresses case-insensitively', async () => {
+    const created = await createBinding(db, {
+      emailAddress: 'TaKo@Octo.JP',
+      discordGuildId: 'guild-1',
+      discordChannelId: 'chan-1',
+      createdBy: 'user-1',
+    });
+
+    expect(created.emailAddress).toBe('tako@octo.jp');
+    expect((await resolveBindingByAddress(db, 'Tako@OCTO.jp'))?.discordChannelId).toBe('chan-1');
+    expect((await resolveBindingByAddress(db, 'tako@octo.jp'))?.discordChannelId).toBe('chan-1');
+  });
+
   it('returns null when no binding matches', async () => {
     expect(await resolveBindingByChannel(db, 'missing')).toBeNull();
     expect(await resolveBindingByAddress(db, 'missing@x.com')).toBeNull();

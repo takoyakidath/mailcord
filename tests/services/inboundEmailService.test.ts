@@ -64,6 +64,117 @@ describe('handleInboundEmail', () => {
     expect(thread?.direction).toBe('inbound');
   });
 
+  it('prefers the SDK message_id over the header lookup', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-mid',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<sdk-field@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: { 'Message-Id': '<header@x>' },
+        attachments: [],
+      }),
+    });
+
+    await handleInboundEmail(db, resend, poster, 'email-mid');
+
+    const thread = await resolveThreadByDiscordMessageId(db, 'discord-msg-1');
+    expect(thread?.emailMessageId).toBe('<sdk-field@x>');
+  });
+
+  it('matches a recipient regardless of case', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-case',
+        from: 'friend@example.com',
+        to: ['Tako@Octo.JP'],
+        receivedFor: [],
+        messageId: '<case@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-case');
+    expect(result.handled).toBe(true);
+    expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.anything());
+  });
+
+  it('matches a "Name <addr>"-formatted recipient', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-display',
+        from: 'friend@example.com',
+        to: ['Tako Yaki <tako@octo.jp>'],
+        receivedFor: [],
+        messageId: '<display@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-display');
+    expect(result.handled).toBe(true);
+  });
+
+  it('matches via received_for when the To header does not name the bound address', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-bcc',
+        from: 'friend@example.com',
+        to: ['list@elsewhere.example'],
+        receivedFor: ['tako@octo.jp'],
+        messageId: '<bcc@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-bcc');
+    expect(result.handled).toBe(true);
+  });
+
+  it('skips an oversized attachment and notes it in the body preview', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-big',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<big@x>',
+        subject: 'Hello',
+        text: 'Body text',
+        html: '',
+        headers: {},
+        attachments: [
+          { id: 'att-big', filename: 'huge.zip', contentType: 'application/zip', size: 25 * 1024 * 1024 },
+          { id: 'att-ok', filename: 'a.pdf', contentType: 'application/pdf', size: 10 },
+        ],
+      }),
+    });
+
+    await handleInboundEmail(db, resend, poster, 'email-big');
+
+    expect(resend.getAttachmentDownloadUrl).toHaveBeenCalledTimes(1);
+    expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
+      attachments: [{ filename: 'a.pdf', content: Buffer.from('file-bytes') }],
+      bodyPreview: 'Body text\n\n(添付は容量超過のため省略されました)',
+    }));
+  });
+
   it('falls back to a stripped HTML preview when text is empty', async () => {
     const resend = fakeResend({
       getReceivedEmail: vi.fn().mockResolvedValue({

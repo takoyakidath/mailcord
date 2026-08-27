@@ -69,6 +69,8 @@ describe('resendClient', () => {
         id: 'email-1',
         from: 'Friend <friend@example.com>',
         to: ['tako@octo.jp'],
+        received_for: ['alias@octo.jp'],
+        message_id: '<m1@x>',
         subject: 'Hi',
         text: 'body',
         html: '<p>body</p>',
@@ -83,6 +85,8 @@ describe('resendClient', () => {
 
     const email = await client.getReceivedEmail('email-1');
     expect(email.emailId).toBe('email-1');
+    expect(email.receivedFor).toEqual(['alias@octo.jp']);
+    expect(email.messageId).toBe('<m1@x>');
     expect(email.attachments[0]).toEqual({ id: 'att-1', filename: 'a.pdf', contentType: 'application/pdf', size: 10 });
   });
 
@@ -106,6 +110,8 @@ describe('resendClient', () => {
     expect(email.text).toBe('');
     expect(email.html).toBe('');
     expect(email.headers).toEqual({});
+    expect(email.receivedFor).toEqual([]);
+    expect(email.messageId).toBe('');
   });
 
   // NOTE: resend@6.24.0's GetAttachmentOptions is `{ emailId, id }`, not `{ emailId, attachmentId }`.

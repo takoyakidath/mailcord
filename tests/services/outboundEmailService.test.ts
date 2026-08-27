@@ -75,6 +75,27 @@ describe('outboundEmailService', () => {
       expect(thread?.emailMessageId).not.toBe(RESEND_EMAIL_ID);
     });
 
+    it('skips attachments over the Resend size budget and notes it in the body', async () => {
+      const resend = fakeResend();
+      // 21MB each: base64-encoded that is ~28MB, so the second one blows the 40MB budget.
+      const big = () => Buffer.alloc(21 * 1024 * 1024);
+      await sendNewEmail(db, resend, {
+        discordChannelId: 'chan-1',
+        discordMessageId: 'discord-msg-big',
+        to: 'friend@example.com',
+        subject: 'Hi',
+        body: 'Hello',
+        attachments: [
+          { filename: 'first.bin', content: big() },
+          { filename: 'second.bin', content: big() },
+        ],
+      });
+
+      const sent = (resend.sendEmail as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(sent.attachments.map((a: { filename: string }) => a.filename)).toEqual(['first.bin']);
+      expect(sent.text).toBe('Hello\n\n(添付は容量超過のため省略されました)');
+    });
+
     it('fails when the channel has no binding', async () => {
       const resend = fakeResend();
       const result = await sendNewEmail(db, resend, {
