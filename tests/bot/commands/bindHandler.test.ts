@@ -28,6 +28,33 @@ describe('bind/unbind/list command handlers', () => {
     expect(list.replyText).not.toContain('tako@octo.jp');
   });
 
+  it('refuses to bind an address that another channel already owns', async () => {
+    await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tako@octo.jp', requestedBy: 'u1' });
+
+    const result = await handleBindCommand(db, {
+      discordGuildId: 'g1',
+      discordChannelId: 'chan-2',
+      emailAddress: 'tako@octo.jp',
+      requestedBy: 'u2',
+    });
+
+    expect(result.replyText).toContain('既に');
+    expect(result.replyText).toContain('chan-1');
+
+    // The original binding is untouched and no duplicate row was created.
+    const list = await handleListCommand(db, { discordGuildId: 'g1' });
+    expect(list.replyText).toBe('<#chan-1> ⇔ `tako@octo.jp`');
+  });
+
+  it('rebinding the same channel to the same address still succeeds', async () => {
+    await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tako@octo.jp', requestedBy: 'u1' });
+    const again = await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'TAKO@octo.jp', requestedBy: 'u1' });
+
+    expect(again.replyText).toContain('バインドしました');
+    const list = await handleListCommand(db, { discordGuildId: 'g1' });
+    expect(list.replyText).toBe('<#chan-1> ⇔ `tako@octo.jp`');
+  });
+
   it('unbind reports whether a binding existed', async () => {
     const notBound = await handleUnbindCommand(db, { discordChannelId: 'chan-1' });
     expect(notBound.replyText).toContain('バインドされていません');

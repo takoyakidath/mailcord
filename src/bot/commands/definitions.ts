@@ -3,6 +3,8 @@ import { SlashCommandBuilder } from 'discord.js';
 export const mailCommand = new SlashCommandBuilder()
   .setName('mail')
   .setDescription('メールをDiscordで送受信する')
+  // Every subcommand needs a guild/channel context; DMs would leave `guildId` null.
+  .setDMPermission(false)
   .addSubcommand((sub) =>
     sub
       .setName('bind')

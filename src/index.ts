@@ -4,6 +4,12 @@ import { createResendClient } from './mail/resendClient';
 import { createServer } from './web/server';
 import { createBotClient, createDiscordPoster } from './bot/client';
 
+// Defence in depth: the discord.js event handlers catch their own errors, but a stray
+// rejection anywhere else must not take the whole process (bot + webhook server) down.
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
+});
+
 async function main() {
   const env = loadEnv();
   const db = createDb(env.DB_PATH);
