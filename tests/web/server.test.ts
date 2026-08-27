@@ -39,6 +39,36 @@ describe('POST /webhooks/resend/inbound', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('returns 500 (so Resend retries) when inbound handling throws', async () => {
+    const db = createDb(':memory:');
+    const resend = {
+      verifyWebhookSignature: vi.fn().mockResolvedValue({
+        type: 'email.received',
+        data: { email_id: 'email-1', from: 'friend@example.com', to: ['tako@octo.jp'], subject: 'Hi' },
+      }),
+      getReceivedEmail: vi.fn().mockRejectedValue(new Error('resend is down')),
+      getAttachmentDownloadUrl: vi.fn(),
+      sendEmail: vi.fn(),
+    } as unknown as ResendClient;
+    const poster = { postEmailMessage: vi.fn() } as unknown as DiscordPoster;
+    const app = createServer(db, resend, poster, secret);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/resend/inbound',
+      payload: '{}',
+      headers: {
+        'content-type': 'application/json',
+        'svix-id': 'msg_1',
+        'svix-timestamp': '1700000000',
+        'svix-signature': 'v1,whatever',
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(poster.postEmailMessage).not.toHaveBeenCalled();
+  });
+
   it('verifies a genuine Svix-style signature and invokes the inbound handler', async () => {
     const db = createDb(':memory:');
     await createBinding(db, {

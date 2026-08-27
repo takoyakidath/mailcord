@@ -10,7 +10,7 @@ export function createServer(
   poster: DiscordPoster,
   webhookSecret: string,
 ): FastifyInstance {
-  const app = Fastify();
+  const app = Fastify({ logger: true });
 
   // Keep the raw request body so the Resend/Svix signature can be verified byte-for-byte.
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
@@ -31,16 +31,32 @@ export function createServer(
     );
 
     if (!event) {
+      // Spec: reject with 401 and log only (no Discord notification).
+      request.log.warn({ svixId: request.headers['svix-id'] }, 'invalid webhook signature');
       reply.code(401).send({ error: 'invalid signature' });
       return;
     }
 
     if (event.type !== 'email.received') {
+      request.log.info({ type: event.type }, 'ignoring non-inbound webhook event');
       reply.code(200).send({ ok: true, handled: false });
       return;
     }
 
-    const result = await handleInboundEmail(db, resend, poster, event.data.email_id);
+    let result;
+    try {
+      result = await handleInboundEmail(db, resend, poster, event.data.email_id);
+    } catch (err) {
+      // Surface a 500 so Resend retries rather than treating a failure as delivered.
+      request.log.error({ err, emailId: event.data.email_id }, 'inbound email handling failed');
+      throw err;
+    }
+
+    if (!result.handled) {
+      // Spec: mail to an unbound address is logged and discarded.
+      request.log.warn({ emailId: event.data.email_id, reason: result.reason }, 'inbound email discarded');
+    }
+
     reply.code(200).send({ ok: true, handled: result.handled });
   });
 

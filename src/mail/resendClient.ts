@@ -92,7 +92,9 @@ export function createResendClient(apiKey: string): ResendClient {
     async verifyWebhookSignature(payload, headers, secret) {
       try {
         return (await resend.webhooks.verify({ payload, headers, webhookSecret: secret })) as WebhookEvent;
-      } catch {
+      } catch (err) {
+        // A misconfigured RESEND_WEBHOOK_SECRET looks exactly like a bad signature, so leave a trace.
+        console.warn('webhook signature verification failed:', err instanceof Error ? err.message : err);
         return null;
       }
     },
