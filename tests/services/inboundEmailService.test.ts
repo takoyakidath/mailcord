@@ -252,6 +252,32 @@ describe('handleInboundEmail', () => {
     }));
   });
 
+  it('skips a Resend email id that was already processed (webhook retry)', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-dup',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<dup@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const first = await handleInboundEmail(db, resend, poster, 'email-dup');
+    const second = await handleInboundEmail(db, resend, poster, 'email-dup');
+
+    expect(first.handled).toBe(true);
+    expect(second.handled).toBe(false);
+    expect(second.reason).toMatch(/already processed/);
+    expect(poster.postEmailMessage).toHaveBeenCalledTimes(1);
+    expect(resend.getReceivedEmail).toHaveBeenCalledTimes(1);
+  });
+
   it('reports unhandled when no binding matches any recipient', async () => {
     const resend = fakeResend({
       getReceivedEmail: vi.fn().mockResolvedValue({

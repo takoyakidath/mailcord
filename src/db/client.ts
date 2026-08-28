@@ -15,6 +15,11 @@ function applySchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS processed_inbound_emails (
+      resend_email_id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS email_threads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       discord_message_id TEXT NOT NULL UNIQUE,

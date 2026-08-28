@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import type { ResendClient } from '../mail/resendClient';
 import { resolveBindingByAddress } from './bindingService';
@@ -5,6 +6,7 @@ import { recordThreadMessage } from './threadService';
 import { extractEmailAddress } from '../mail/address';
 import { stripHtml } from '../util/stripHtml';
 import { fetchAsBuffer } from '../util/fetchBuffer';
+import { processedInboundEmails } from '../db/schema';
 
 export interface DiscordAttachmentInput {
   filename: string;
@@ -32,12 +34,32 @@ function candidateRecipients(email: { to: string[]; receivedFor?: string[] }): s
   return [...new Set(normalized)];
 }
 
+// Resend/Svix redeliver a webhook on timeout or a 5xx response (see web/server.ts), which would
+// otherwise re-post the same email to Discord. Checked before any Resend/Discord call so a retry
+// costs one cheap lookup instead of re-fetching the email and its attachments.
+async function alreadyProcessed(db: Db, emailId: string): Promise<boolean> {
+  const rows = await db
+    .select()
+    .from(processedInboundEmails)
+    .where(eq(processedInboundEmails.resendEmailId, emailId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function markProcessed(db: Db, emailId: string): Promise<void> {
+  await db.insert(processedInboundEmails).values({ resendEmailId: emailId, createdAt: new Date().toISOString() });
+}
+
 export async function handleInboundEmail(
   db: Db,
   resend: ResendClient,
   poster: DiscordPoster,
   emailId: string,
 ): Promise<{ handled: boolean; reason?: string }> {
+  if (await alreadyProcessed(db, emailId)) {
+    return { handled: false, reason: `email ${emailId} was already processed` };
+  }
+
   const email = await resend.getReceivedEmail(emailId);
 
   const recipients = candidateRecipients(email);
@@ -111,6 +133,8 @@ export async function handleInboundEmail(
     referencesChain: email.headers['References'] ?? null,
     direction: 'inbound',
   });
+
+  await markProcessed(db, emailId);
 
   return { handled: true };
 }

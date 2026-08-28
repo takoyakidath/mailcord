@@ -9,6 +9,13 @@ export const addressBindings = sqliteTable('address_bindings', {
   createdAt: text('created_at').notNull(),
 });
 
+// Tracks Resend inbound email ids we've already handled, so a webhook redelivery (e.g. Resend
+// retrying after the process was down or a handler error) doesn't double-post to Discord.
+export const processedInboundEmails = sqliteTable('processed_inbound_emails', {
+  resendEmailId: text('resend_email_id').primaryKey(),
+  createdAt: text('created_at').notNull(),
+});
+
 export const emailThreads = sqliteTable('email_threads', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   discordMessageId: text('discord_message_id').notNull().unique(),
