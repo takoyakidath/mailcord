@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { loadEnv } from '../env';
 import { registerCommands } from './registerCommands';
 

@@ -1,5 +1,6 @@
+import 'dotenv/config';
 import { loadEnv } from './env';
-import { createDb } from './db/client';
+import { createDbWithHandle } from './db/client';
 import { createResendClient } from './mail/resendClient';
 import { createServer } from './web/server';
 import { createBotClient, createDiscordPoster } from './bot/client';
@@ -12,7 +13,7 @@ process.on('unhandledRejection', (err) => {
 
 async function main() {
   const env = loadEnv();
-  const db = createDb(env.DB_PATH);
+  const { db, sqlite } = createDbWithHandle(env.DB_PATH);
   const resend = createResendClient(env.RESEND_API_KEY);
 
   const bot = createBotClient(db, resend);
@@ -23,6 +24,32 @@ async function main() {
   await server.listen({ host: '0.0.0.0', port: env.PORT });
 
   console.log(`mailcord listening on :${env.PORT}`);
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal}, shutting down...`);
+    try {
+      await server.close();
+    } catch (err) {
+      console.error('error closing HTTP server:', err);
+    }
+    try {
+      bot.destroy();
+    } catch (err) {
+      console.error('error destroying Discord client:', err);
+    }
+    try {
+      sqlite.close();
+    } catch (err) {
+      console.error('error closing database:', err);
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
 main().catch((err) => {

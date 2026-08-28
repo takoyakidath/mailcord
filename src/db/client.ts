@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
@@ -28,11 +30,24 @@ function applySchema(sqlite: Database.Database) {
   `);
 }
 
-export function createDb(path: string) {
+// A fresh clone's `data/` directory doesn't exist yet (it's gitignored); Docker's VOLUME
+// mount creates it for us, but a local `npm run dev` needs it created explicitly.
+function ensureParentDirectory(path: string): void {
+  if (path === ':memory:') return;
+  mkdirSync(dirname(path), { recursive: true });
+}
+
+/** Returns both the query interface and the raw handle, for callers that need to close it. */
+export function createDbWithHandle(path: string): { db: ReturnType<typeof drizzle<typeof schema>>; sqlite: Database.Database } {
+  ensureParentDirectory(path);
   const sqlite = new Database(path);
   sqlite.pragma('journal_mode = WAL');
   applySchema(sqlite);
-  return drizzle(sqlite, { schema });
+  return { db: drizzle(sqlite, { schema }), sqlite };
+}
+
+export function createDb(path: string) {
+  return createDbWithHandle(path).db;
 }
 
 export type Db = ReturnType<typeof createDb>;
