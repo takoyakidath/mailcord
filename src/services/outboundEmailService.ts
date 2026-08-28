@@ -42,6 +42,61 @@ function generateMessageId(fromAddress: string): string {
 
 export type OutboundResult = { ok: true; emailId: string } | { ok: false; error: string };
 
+interface SendAndRecordParams {
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  headers: Record<string, string>;
+  attachments: OutboundAttachment[] | undefined;
+  skippedAttachments: boolean;
+  messageId: string;
+  discordMessageId: string;
+  bindingId: number;
+  inReplyTo: string | null;
+  referencesChain: string | null;
+}
+
+// Shared by sendNewEmail and sendReplyEmail: send via Resend, then record the thread row for
+// future reply resolution. These are two separate failure domains — if the send itself fails,
+// nothing happened and the caller should see an error. If the send succeeds but *recording*
+// fails, the email already went out; reporting that as a failure would make the user retry and
+// double-send, so a bookkeeping failure here is logged, not surfaced as ok:false. The cost is a
+// thread that isn't reply-able until investigated, which is far cheaper than a duplicate email.
+async function sendAndRecord(db: Db, resend: ResendClient, params: SendAndRecordParams): Promise<OutboundResult> {
+  let emailId: string;
+  try {
+    const result = await resend.sendEmail({
+      from: params.from,
+      to: params.to,
+      subject: params.subject,
+      text: params.skippedAttachments ? params.body + SKIPPED_ATTACHMENT_NOTE : params.body,
+      headers: params.headers,
+      attachments: params.attachments,
+    });
+    emailId = result.id;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  try {
+    await recordThreadMessage(db, {
+      discordMessageId: params.discordMessageId,
+      bindingId: params.bindingId,
+      externalAddress: params.to,
+      subject: params.subject,
+      emailMessageId: params.messageId,
+      inReplyTo: params.inReplyTo,
+      referencesChain: params.referencesChain,
+      direction: 'outbound',
+    });
+  } catch (err) {
+    console.error('recordThreadMessage failed after a successful send:', err);
+  }
+
+  return { ok: true, emailId };
+}
+
 export interface SendNewEmailInput {
   discordChannelId: string;
   discordMessageId: string;
@@ -60,31 +115,20 @@ export async function sendNewEmail(db: Db, resend: ResendClient, input: SendNewE
   const messageId = generateMessageId(binding.emailAddress);
   const limited = limitAttachments(input.attachments);
 
-  try {
-    const { id } = await resend.sendEmail({
-      from: binding.emailAddress,
-      to: input.to,
-      subject: input.subject,
-      text: limited.skipped ? input.body + SKIPPED_ATTACHMENT_NOTE : input.body,
-      headers: { 'Message-ID': messageId },
-      attachments: limited.attachments,
-    });
-
-    await recordThreadMessage(db, {
-      discordMessageId: input.discordMessageId,
-      bindingId: binding.id,
-      externalAddress: input.to,
-      subject: input.subject,
-      emailMessageId: messageId,
-      inReplyTo: null,
-      referencesChain: null,
-      direction: 'outbound',
-    });
-
-    return { ok: true, emailId: id };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  return sendAndRecord(db, resend, {
+    from: binding.emailAddress,
+    to: input.to,
+    subject: input.subject,
+    body: input.body,
+    headers: { 'Message-ID': messageId },
+    attachments: limited.attachments,
+    skippedAttachments: limited.skipped,
+    messageId,
+    discordMessageId: input.discordMessageId,
+    bindingId: binding.id,
+    inReplyTo: null,
+    referencesChain: null,
+  });
 }
 
 export interface SendReplyEmailInput {
@@ -112,29 +156,18 @@ export async function sendReplyEmail(db: Db, resend: ResendClient, input: SendRe
   const messageId = generateMessageId(binding.emailAddress);
   const limited = limitAttachments(input.attachments);
 
-  try {
-    const { id } = await resend.sendEmail({
-      from: binding.emailAddress,
-      to: originalThread.externalAddress,
-      subject,
-      text: limited.skipped ? input.body + SKIPPED_ATTACHMENT_NOTE : input.body,
-      headers: { 'Message-ID': messageId, 'In-Reply-To': inReplyTo, References: references },
-      attachments: limited.attachments,
-    });
-
-    await recordThreadMessage(db, {
-      discordMessageId: input.discordMessageId,
-      bindingId: binding.id,
-      externalAddress: originalThread.externalAddress,
-      subject,
-      emailMessageId: messageId,
-      inReplyTo,
-      referencesChain: references,
-      direction: 'outbound',
-    });
-
-    return { ok: true, emailId: id };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  return sendAndRecord(db, resend, {
+    from: binding.emailAddress,
+    to: originalThread.externalAddress,
+    subject,
+    body: input.body,
+    headers: { 'Message-ID': messageId, 'In-Reply-To': inReplyTo, References: references },
+    attachments: limited.attachments,
+    skippedAttachments: limited.skipped,
+    messageId,
+    discordMessageId: input.discordMessageId,
+    bindingId: binding.id,
+    inReplyTo,
+    referencesChain: references,
+  });
 }

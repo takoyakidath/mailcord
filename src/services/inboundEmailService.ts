@@ -21,7 +21,8 @@ export interface DiscordPoster {
 const BODY_PREVIEW_MAX_LENGTH = 1800;
 /** Discord's default (non-boosted) per-file upload limit. */
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const SKIPPED_ATTACHMENT_NOTE = '\n\n(添付は容量超過のため省略されました)';
+const SKIPPED_ATTACHMENT_NOTE = '(添付は容量超過のため省略されました)';
+const TRUNCATED_BODY_NOTE = '…(本文が長いため省略されました)';
 
 /** Candidate recipient addresses, normalized so `Tako <Tako@Octo.jp>` matches `tako@octo.jp`. */
 function candidateRecipients(email: { to: string[]; receivedFor?: string[] }): string[] {
@@ -49,28 +50,41 @@ export async function handleInboundEmail(
     return { handled: false, reason: `no binding for recipients: ${recipients.join(', ')}` };
   }
 
+  // Fetch attachments concurrently, and isolate one attachment's failure (oversized or a
+  // download error) from the rest — a single bad attachment must not blackhole the whole email.
+  const attachmentResults = await Promise.allSettled(
+    email.attachments.map(async (att) => {
+      // Spec: oversized attachments are skipped and noted in the body.
+      if (att.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error(`attachment ${att.filename} exceeds the size limit (declared ${att.size} bytes)`);
+      }
+      const url = await resend.getAttachmentDownloadUrl(email.emailId, att.id);
+      const content = await fetchAsBuffer(url);
+      if (content.byteLength > MAX_ATTACHMENT_BYTES) {
+        throw new Error(`attachment ${att.filename} exceeds the size limit (actual ${content.byteLength} bytes)`);
+      }
+      return { filename: att.filename, content };
+    }),
+  );
+
   const attachments: DiscordAttachmentInput[] = [];
   let skippedAttachment = false;
-  for (const att of email.attachments) {
-    // Spec: oversized attachments are skipped and noted in the body.
-    if (att.size > MAX_ATTACHMENT_BYTES) {
+  for (const result of attachmentResults) {
+    if (result.status === 'fulfilled') {
+      attachments.push(result.value);
+    } else {
       skippedAttachment = true;
-      continue;
+      console.error('skipping inbound attachment:', result.reason);
     }
-    const url = await resend.getAttachmentDownloadUrl(email.emailId, att.id);
-    const content = await fetchAsBuffer(url);
-    if (content.byteLength > MAX_ATTACHMENT_BYTES) {
-      skippedAttachment = true;
-      continue;
-    }
-    attachments.push({ filename: att.filename, content });
   }
 
   const rawBody = email.text || stripHtml(email.html) || '';
-  let bodyPreview = rawBody.slice(0, BODY_PREVIEW_MAX_LENGTH);
-  if (skippedAttachment) {
-    bodyPreview = bodyPreview.slice(0, BODY_PREVIEW_MAX_LENGTH - SKIPPED_ATTACHMENT_NOTE.length) + SKIPPED_ATTACHMENT_NOTE;
-  }
+  const truncated = rawBody.length > BODY_PREVIEW_MAX_LENGTH;
+  const notes = [truncated && TRUNCATED_BODY_NOTE, skippedAttachment && SKIPPED_ATTACHMENT_NOTE].filter(
+    (note): note is string => Boolean(note),
+  );
+  const suffix = notes.length > 0 ? `\n\n${notes.join('\n')}` : '';
+  const bodyPreview = rawBody.slice(0, BODY_PREVIEW_MAX_LENGTH - suffix.length) + suffix;
 
   const { discordMessageId } = await poster.postEmailMessage(binding.discordChannelId, {
     from: email.from,

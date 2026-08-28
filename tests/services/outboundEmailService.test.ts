@@ -120,6 +120,34 @@ describe('outboundEmailService', () => {
       });
       expect(result).toEqual({ ok: false, error: 'rate limited' });
     });
+
+    it('still reports success when the send succeeds but recording the thread row fails', async () => {
+      // The UNIQUE constraint on discord_message_id makes recordThreadMessage throw for a
+      // duplicate id, simulating any bookkeeping failure that happens after a real send.
+      const binding = await createBinding(db, { emailAddress: 'dup@octo.jp', discordGuildId: 'guild-1', discordChannelId: 'chan-dup', createdBy: 'u1' });
+      await recordThreadMessage(db, {
+        discordMessageId: 'already-used',
+        bindingId: binding.id,
+        externalAddress: 'someone@example.com',
+        subject: 'Existing',
+        emailMessageId: '<existing@octo.jp>',
+        inReplyTo: null,
+        referencesChain: null,
+        direction: 'outbound',
+      });
+
+      const resend = fakeResend();
+      const result = await sendNewEmail(db, resend, {
+        discordChannelId: 'chan-dup',
+        discordMessageId: 'already-used',
+        to: 'friend@example.com',
+        subject: 'Hi',
+        body: 'Hello',
+      });
+
+      expect(result).toEqual({ ok: true, emailId: RESEND_EMAIL_ID });
+      expect(resend.sendEmail).toHaveBeenCalled();
+    });
   });
 
   describe('sendReplyEmail', () => {
@@ -181,6 +209,34 @@ describe('outboundEmailService', () => {
       });
       expect(result.ok).toBe(false);
       expect(resend.sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('returns an error result when Resend throws', async () => {
+      const binding = await createBinding(db, {
+        emailAddress: 'tai2@octo.jp',
+        discordGuildId: 'guild-1',
+        discordChannelId: 'chan-3',
+        createdBy: 'user-1',
+      });
+      await recordThreadMessage(db, {
+        discordMessageId: 'inbound-msg-2',
+        bindingId: binding.id,
+        externalAddress: 'friend@example.com',
+        subject: 'Original subject',
+        emailMessageId: '<orig2@x>',
+        inReplyTo: null,
+        referencesChain: null,
+        direction: 'inbound',
+      });
+
+      const resend = fakeResend({ sendEmail: vi.fn().mockRejectedValue(new Error('rate limited')) });
+      const result = await sendReplyEmail(db, resend, {
+        discordChannelId: 'chan-3',
+        discordMessageId: 'discord-reply-3',
+        repliedToDiscordMessageId: 'inbound-msg-2',
+        body: 'Thanks!',
+      });
+      expect(result).toEqual({ ok: false, error: 'rate limited' });
     });
   });
 });

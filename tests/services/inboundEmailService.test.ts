@@ -4,6 +4,7 @@ import { createBinding } from '../../src/services/bindingService';
 import { resolveThreadByDiscordMessageId } from '../../src/services/threadService';
 import { handleInboundEmail, type DiscordPoster } from '../../src/services/inboundEmailService';
 import type { ResendClient } from '../../src/mail/resendClient';
+import { fetchAsBuffer } from '../../src/util/fetchBuffer';
 
 vi.mock('../../src/util/fetchBuffer', () => ({
   fetchAsBuffer: vi.fn().mockResolvedValue(Buffer.from('file-bytes')),
@@ -173,6 +174,61 @@ describe('handleInboundEmail', () => {
       attachments: [{ filename: 'a.pdf', content: Buffer.from('file-bytes') }],
       bodyPreview: 'Body text\n\n(添付は容量超過のため省略されました)',
     }));
+  });
+
+  it('isolates one failed attachment download from the rest of the email', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-mixed',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<mixed@x>',
+        subject: 'Hello',
+        text: 'Body text',
+        html: '',
+        headers: {},
+        attachments: [
+          { id: 'att-bad', filename: 'bad.pdf', contentType: 'application/pdf', size: 10 },
+          { id: 'att-ok', filename: 'ok.pdf', contentType: 'application/pdf', size: 10 },
+        ],
+      }),
+    });
+
+    (fetchAsBuffer as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce(Buffer.from('ok-bytes'));
+
+    await handleInboundEmail(db, resend, poster, 'email-mixed');
+
+    expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
+      attachments: [{ filename: 'ok.pdf', content: Buffer.from('ok-bytes') }],
+      bodyPreview: 'Body text\n\n(添付は容量超過のため省略されました)',
+    }));
+  });
+
+  it('appends a truncation note when the body exceeds the preview length', async () => {
+    const longText = 'a'.repeat(2000);
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-long',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<long@x>',
+        subject: 'Hello',
+        text: longText,
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    await handleInboundEmail(db, resend, poster, 'email-long');
+
+    const call = (poster.postEmailMessage as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(call.bodyPreview.length).toBeLessThanOrEqual(1800);
+    expect(call.bodyPreview.endsWith('…(本文が長いため省略されました)')).toBe(true);
   });
 
   it('falls back to a stripped HTML preview when text is empty', async () => {
