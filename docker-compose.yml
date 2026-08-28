@@ -9,6 +9,7 @@ services:
       - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
       - DB_PATH=/app/data/mailcord.db
       - PORT=8787
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     volumes:
       - mailcord_data:/app/data
     expose:
