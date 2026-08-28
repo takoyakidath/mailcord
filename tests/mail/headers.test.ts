@@ -27,5 +27,6 @@ describe('buildReplySubject', () => {
   it('does not double-prefix', () => {
     expect(buildReplySubject('Re: Hello')).toBe('Re: Hello');
     expect(buildReplySubject('re: Hello')).toBe('re: Hello');
+    expect(buildReplySubject('RE: Hello')).toBe('RE: Hello');
   });
 });

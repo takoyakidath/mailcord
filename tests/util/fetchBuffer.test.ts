@@ -22,4 +22,9 @@ describe('fetchAsBuffer', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     await expect(fetchAsBuffer('https://example.com/missing')).rejects.toThrow();
   });
+
+  it('propagates a network-level fetch rejection', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+    await expect(fetchAsBuffer('https://example.com/unreachable')).rejects.toThrow('fetch failed');
+  });
 });

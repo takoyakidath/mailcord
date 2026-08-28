@@ -9,4 +9,13 @@ describe('stripHtml', () => {
   it('handles plain text unchanged', () => {
     expect(stripHtml('Hello World')).toBe('Hello World');
   });
+
+  it('returns an empty string for empty input', () => {
+    expect(stripHtml('')).toBe('');
+  });
+
+  it('returns an empty string for whitespace-only or tag-only input', () => {
+    expect(stripHtml('   ')).toBe('');
+    expect(stripHtml('<div></div>')).toBe('');
+  });
 });

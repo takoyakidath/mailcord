@@ -20,4 +20,9 @@ describe('loadEnv', () => {
     const { DISCORD_BOT_TOKEN, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow();
   });
+
+  it('coerces PORT from a string, as real process.env values arrive', () => {
+    const env = loadEnv({ ...validEnv, PORT: '3000' });
+    expect(env.PORT).toBe(3000);
+  });
 });

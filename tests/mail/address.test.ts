@@ -9,4 +9,8 @@ describe('extractEmailAddress', () => {
   it('returns a bare address unchanged', () => {
     expect(extractEmailAddress('noreply@acme.com')).toBe('noreply@acme.com');
   });
+
+  it('trims whitespace padding inside angle brackets', () => {
+    expect(extractEmailAddress('Name < a@b.com >')).toBe('a@b.com');
+  });
 });

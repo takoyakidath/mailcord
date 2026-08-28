@@ -1,4 +1,4 @@
 export function extractEmailAddress(raw: string): string {
   const match = raw.match(/<([^>]+)>/);
-  return match ? match[1] : raw.trim();
+  return match ? match[1].trim() : raw.trim();
 }
