@@ -1,3 +1,0 @@
-mail-hook.example.com {
-  reverse_proxy app:8787
-}

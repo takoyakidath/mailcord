@@ -1,6 +1,6 @@
 # mailcord
 
-独自ドメインのメールをDiscord上で送受信するBot。[Resend](https://resend.com)を送受信の両方に使い、discord.jsのBotとFastifyのwebhookサーバーを1プロセスで動かす。SQLite 1ファイル(Drizzle ORM)に状態を持ち、Docker Compose(app + Caddy)でデプロイする。
+独自ドメインのメールをDiscord上で送受信するBot。[Resend](https://resend.com)を送受信の両方に使い、discord.jsのBotとFastifyのwebhookサーバーを1プロセスで動かす。SQLite 1ファイル(Drizzle ORM)に状態を持ち、Docker Compose(app + Cloudflare Tunnel)でデプロイする。
 
 設計の詳細は `docs/superpowers/specs/2026-08-27-mailcord-design.md` を参照。
 
@@ -34,6 +34,7 @@ cp .env.example .env
 | `RESEND_WEBHOOK_SECRET` | Resendのinbound webhook署名シークレット(`whsec_...`) |
 | `DB_PATH` | SQLiteファイルのパス(省略時 `./data/mailcord.db`) |
 | `PORT` | HTTPサーバーのポート(省略時 `8787`) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnelのトークン(Docker Compose利用時のみ必要。下記「5. デプロイ」参照) |
 
 ### 2. Discord Bot側の設定
 
@@ -60,14 +61,20 @@ npm run register-commands
 
 Discord側への反映(global command)には数分〜最大1時間ほどかかることがある。デプロイのたびに実行する必要はなく、コマンド定義を変更したときだけでよい。
 
-### 5. デプロイ(Docker Compose)
+### 5. デプロイ(Docker Compose + Cloudflare Tunnel)
 
-`Caddyfile` の `mail-hook.example.com` を実際のサブドメインに書き換え、そのDNS(A/AAAAレコード)をサーバーのIPに向けてから起動する(CaddyがTLS証明書を取得できるようにするため):
+ポート開放や固定IP/DDNSなしで公開できるよう、Cloudflare Tunnel経由でデプロイする(自宅サーバーでの運用にも向く)。
+
+1. [Cloudflare Zero Trust ダッシュボード](https://one.dash.cloudflare.com/) → **Networks > Tunnels** で新しいトンネルを作成(Docker用の接続方法を選ぶ)。
+2. 発行される **トンネルトークン**を `.env` の `CLOUDFLARE_TUNNEL_TOKEN` に設定する。
+3. 同じ画面の **Public Hostname** 設定で、使いたいサブドメイン(例: `mail-hook.octo.jp`)を追加し、Service に `HTTP` / `app:8787` を指定する(`app` はdocker-compose内のサービス名なので、この文字列のまま設定してよい)。DNSレコードはCloudflareが自動で作成する。
+4. Resendのwebhook URLをそのサブドメイン(`https://mail-hook.octo.jp/webhooks/resend/inbound`)に向ける。
 
 ```bash
 docker compose build
 docker compose up -d
 docker compose logs -f app
+docker compose logs -f cloudflared
 ```
 
 `mailcord listening on :8787` のログが出て再起動ループしていなければ正常。
