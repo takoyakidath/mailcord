@@ -9,7 +9,13 @@ export const mailCommand = new SlashCommandBuilder()
     sub
       .setName('bind')
       .setDescription('このチャンネルをメールアドレスにバインドする')
-      .addStringOption((opt) => opt.setName('address').setDescription('メールアドレス').setRequired(true)),
+      .addStringOption((opt) => opt.setName('address').setDescription('メールアドレス').setRequired(true))
+      .addBooleanOption((opt) =>
+        opt
+          .setName('force')
+          .setDescription('既存のバインドを別アドレスで上書きする場合はtrue')
+          .setRequired(false),
+      ),
   )
   .addSubcommand((sub) => sub.setName('unbind').setDescription('このチャンネルのバインドを解除する'))
   .addSubcommand((sub) => sub.setName('list').setDescription('このサーバーのバインド一覧を表示する'))

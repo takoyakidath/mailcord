@@ -2,14 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { addressBindings } from '../db/schema';
 
-export interface Binding {
-  id: number;
-  emailAddress: string;
-  discordGuildId: string;
-  discordChannelId: string;
-  createdBy: string;
-  createdAt: string;
-}
+export type Binding = typeof addressBindings.$inferSelect;
 
 export interface CreateBindingParams {
   emailAddress: string;
@@ -29,7 +22,7 @@ export async function createBinding(db: Db, params: CreateBindingParams): Promis
     .insert(addressBindings)
     .values({ ...params, emailAddress: normalizeAddress(params.emailAddress), createdAt })
     .returning();
-  return rows[0] as Binding;
+  return rows[0];
 }
 
 export async function removeBinding(db: Db, discordChannelId: string): Promise<boolean> {
@@ -40,11 +33,10 @@ export async function removeBinding(db: Db, discordChannelId: string): Promise<b
 }
 
 export async function listBindingsForGuild(db: Db, discordGuildId: string): Promise<Binding[]> {
-  const rows = await db
+  return db
     .select()
     .from(addressBindings)
     .where(eq(addressBindings.discordGuildId, discordGuildId));
-  return rows as Binding[];
 }
 
 export async function resolveBindingByChannel(db: Db, discordChannelId: string): Promise<Binding | null> {
@@ -53,7 +45,7 @@ export async function resolveBindingByChannel(db: Db, discordChannelId: string):
     .from(addressBindings)
     .where(eq(addressBindings.discordChannelId, discordChannelId))
     .limit(1);
-  return (rows[0] as Binding) ?? null;
+  return rows[0] ?? null;
 }
 
 export async function resolveBindingByAddress(db: Db, emailAddress: string): Promise<Binding | null> {
@@ -62,5 +54,5 @@ export async function resolveBindingByAddress(db: Db, emailAddress: string): Pro
     .from(addressBindings)
     .where(eq(addressBindings.emailAddress, normalizeAddress(emailAddress)))
     .limit(1);
-  return (rows[0] as Binding) ?? null;
+  return rows[0] ?? null;
 }

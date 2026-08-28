@@ -41,11 +41,13 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
 
       if (sub === 'bind') {
         const address = interaction.options.getString('address', true);
+        const force = interaction.options.getBoolean('force') ?? false;
         const result = await handleBindCommand(db, {
           discordGuildId: interaction.guildId!,
           discordChannelId: interaction.channelId,
           emailAddress: address,
           requestedBy: interaction.user.id,
+          force,
         });
         await interaction.editReply(result.replyText);
         return;

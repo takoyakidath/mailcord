@@ -1,7 +1,7 @@
 import type { Db } from '../../db/client';
 import type { ResendClient, OutboundAttachment } from '../../mail/resendClient';
 import { sendNewEmail } from '../../services/outboundEmailService';
-import type { CommandResult } from './bindHandler';
+import type { CommandResult } from './types';
 
 export interface SendCommandInput {
   discordChannelId: string;

@@ -2,18 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { emailThreads } from '../db/schema';
 
-export interface ThreadRecord {
-  id: number;
-  discordMessageId: string;
-  bindingId: number;
-  externalAddress: string;
-  subject: string;
-  emailMessageId: string;
-  inReplyTo: string | null;
-  referencesChain: string | null;
-  direction: 'inbound' | 'outbound';
-  createdAt: string;
-}
+export type ThreadRecord = typeof emailThreads.$inferSelect;
 
 export async function recordThreadMessage(
   db: Db,
@@ -24,7 +13,7 @@ export async function recordThreadMessage(
     .insert(emailThreads)
     .values({ ...params, createdAt })
     .returning();
-  return rows[0] as ThreadRecord;
+  return rows[0];
 }
 
 export async function resolveThreadByDiscordMessageId(
@@ -36,5 +25,5 @@ export async function resolveThreadByDiscordMessageId(
     .from(emailThreads)
     .where(eq(emailThreads.discordMessageId, discordMessageId))
     .limit(1);
-  return (rows[0] as ThreadRecord) ?? null;
+  return rows[0] ?? null;
 }

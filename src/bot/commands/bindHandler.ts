@@ -6,20 +6,25 @@ import {
   resolveBindingByChannel,
   resolveBindingByAddress,
 } from '../../services/bindingService';
+import { isValidEmailAddress } from '../../mail/address';
+import type { CommandResult } from './types';
 
-export interface CommandResult {
-  replyText: string;
-}
+export type { CommandResult };
 
 export interface BindInput {
   discordGuildId: string;
   discordChannelId: string;
   emailAddress: string;
   requestedBy: string;
+  force?: boolean;
 }
 
 export async function handleBindCommand(db: Db, input: BindInput): Promise<CommandResult> {
   const emailAddress = input.emailAddress.trim().toLowerCase();
+
+  if (!isValidEmailAddress(emailAddress)) {
+    return { replyText: `\`${input.emailAddress}\` は有効なメールアドレスの形式ではありません。` };
+  }
 
   // `address_bindings.email_address` is UNIQUE, so binding an address that another channel
   // already owns would throw at the DB level. Detect it first and answer with a friendly message.
@@ -30,10 +35,20 @@ export async function handleBindCommand(db: Db, input: BindInput): Promise<Comma
     };
   }
 
+  // Spec requires confirming before overwriting an existing binding on this channel.
   const existing = await resolveBindingByChannel(db, input.discordChannelId);
   if (existing) {
+    if (existing.emailAddress === emailAddress) {
+      return { replyText: `このチャンネルは既に \`${emailAddress}\` にバインドされています。` };
+    }
+    if (!input.force) {
+      return {
+        replyText: `このチャンネルは既に \`${existing.emailAddress}\` にバインドされています。\`${emailAddress}\` に変更する場合は \`force:true\` を付けて再実行してください。`,
+      };
+    }
     await removeBinding(db, input.discordChannelId);
   }
+
   await createBinding(db, {
     emailAddress,
     discordGuildId: input.discordGuildId,

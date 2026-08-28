@@ -19,13 +19,35 @@ describe('bind/unbind/list command handlers', () => {
     expect(result.replyText).toContain('tako@octo.jp');
   });
 
-  it('rebinding a channel replaces the previous binding', async () => {
+  it('refuses to rebind a channel to a different address without force, leaving the original intact', async () => {
     await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tako@octo.jp', requestedBy: 'u1' });
-    await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tai@octo.jp', requestedBy: 'u1' });
+    const result = await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tai@octo.jp', requestedBy: 'u1' });
+
+    expect(result.replyText).toContain('force:true');
+    const list = await handleListCommand(db, { discordGuildId: 'g1' });
+    expect(list.replyText).toBe('<#chan-1> ⇔ `tako@octo.jp`');
+  });
+
+  it('rebinds a channel to a different address when force is set', async () => {
+    await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tako@octo.jp', requestedBy: 'u1' });
+    await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tai@octo.jp', requestedBy: 'u1', force: true });
 
     const list = await handleListCommand(db, { discordGuildId: 'g1' });
     expect(list.replyText).toContain('tai@octo.jp');
     expect(list.replyText).not.toContain('tako@octo.jp');
+  });
+
+  it('rejects an invalid email address', async () => {
+    const result = await handleBindCommand(db, {
+      discordGuildId: 'g1',
+      discordChannelId: 'chan-1',
+      emailAddress: 'not-an-email',
+      requestedBy: 'u1',
+    });
+    expect(result.replyText).toContain('有効なメールアドレス');
+
+    const list = await handleListCommand(db, { discordGuildId: 'g1' });
+    expect(list.replyText).toContain('ありません');
   });
 
   it('refuses to bind an address that another channel already owns', async () => {
@@ -46,11 +68,11 @@ describe('bind/unbind/list command handlers', () => {
     expect(list.replyText).toBe('<#chan-1> ⇔ `tako@octo.jp`');
   });
 
-  it('rebinding the same channel to the same address still succeeds', async () => {
+  it('rebinding the same channel to the same address (case-insensitive) is a no-op, not an error', async () => {
     await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'tako@octo.jp', requestedBy: 'u1' });
     const again = await handleBindCommand(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', emailAddress: 'TAKO@octo.jp', requestedBy: 'u1' });
 
-    expect(again.replyText).toContain('バインドしました');
+    expect(again.replyText).toContain('既に');
     const list = await handleListCommand(db, { discordGuildId: 'g1' });
     expect(list.replyText).toBe('<#chan-1> ⇔ `tako@octo.jp`');
   });
