@@ -16,6 +16,15 @@ export const processedInboundEmails = sqliteTable('processed_inbound_emails', {
   createdAt: text('created_at').notNull(),
 });
 
+// Sender addresses an admin has explicitly blocked; matching inbound mail is redirected to the
+// spam-review channel instead of the bound channel.
+export const blockedSenders = sqliteTable('blocked_senders', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  emailAddress: text('email_address').notNull().unique(),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
 export const emailThreads = sqliteTable('email_threads', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   discordMessageId: text('discord_message_id').notNull().unique(),

@@ -11,6 +11,7 @@ import type { ResendClient } from '../mail/resendClient';
 import type { DiscordPoster } from '../services/inboundEmailService';
 import { handleBindCommand, handleUnbindCommand, handleListCommand } from './commands/bindHandler';
 import { handleSendCommand } from './commands/sendHandler';
+import { handleBlockAddCommand, handleBlockRemoveCommand, handleBlockListCommand } from './commands/blockHandler';
 import { classifyIncomingMessage } from './replyDetection';
 import { sendReplyEmail } from '../services/outboundEmailService';
 import { fetchAsBuffer } from '../util/fetchBuffer';
@@ -27,8 +28,39 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'mail') return;
 
     try {
+      const group = interaction.options.getSubcommandGroup(false);
       const sub = interaction.options.getSubcommand();
       await interaction.deferReply();
+
+      if (group === 'block') {
+        // Same policy as bind/unbind: adding/removing a block needs channel-management
+        // permission, while listing the current blocklist is open to anyone.
+        if (sub !== 'list' && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+          await interaction.editReply(MANAGE_CHANNELS_REQUIRED);
+          return;
+        }
+
+        if (sub === 'add') {
+          const address = interaction.options.getString('address', true);
+          const result = await handleBlockAddCommand(db, { emailAddress: address, requestedBy: interaction.user.id });
+          await interaction.editReply(result.replyText);
+          return;
+        }
+
+        if (sub === 'remove') {
+          const address = interaction.options.getString('address', true);
+          const result = await handleBlockRemoveCommand(db, { emailAddress: address });
+          await interaction.editReply(result.replyText);
+          return;
+        }
+
+        if (sub === 'list') {
+          const result = await handleBlockListCommand(db);
+          await interaction.editReply(result.replyText);
+          return;
+        }
+        return;
+      }
 
       if (sub === 'bind' || sub === 'unbind') {
         // Spec: bind/unbind require channel-management permission; list/send are open to anyone.
@@ -169,6 +201,9 @@ export function createDiscordPoster(client: Client): DiscordPoster {
         .setTitle(truncateForEmbed(params.subject || '(件名なし)'))
         .setAuthor({ name: truncateForEmbed(params.from) })
         .setDescription(params.bodyPreview || '(本文なし)');
+      if (params.flagReason) {
+        embed.setColor(0xed4245).addFields({ name: '⚠️ 検知理由', value: truncateForEmbed(params.flagReason) });
+      }
       const message = await channel.send({
         embeds: [embed],
         files: params.attachments.map((a) => ({ attachment: a.content, name: a.filename })),

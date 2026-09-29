@@ -3,6 +3,7 @@ import { createDb, type Db } from '../../src/db/client';
 import { createBinding } from '../../src/services/bindingService';
 import { resolveThreadByDiscordMessageId } from '../../src/services/threadService';
 import { handleInboundEmail, type DiscordPoster } from '../../src/services/inboundEmailService';
+import { blockSender } from '../../src/services/blocklistService';
 import type { ResendClient } from '../../src/mail/resendClient';
 import { fetchAsBuffer } from '../../src/util/fetchBuffer';
 
@@ -19,6 +20,8 @@ function fakeResend(overrides: Partial<ResendClient> = {}): ResendClient {
     ...overrides,
   };
 }
+
+const SPAM_CHANNEL_ID = 'spam-chan';
 
 describe('handleInboundEmail', () => {
   let db: Db;
@@ -49,7 +52,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const result = await handleInboundEmail(db, resend, poster, 'email-1');
+    const result = await handleInboundEmail(db, resend, poster, 'email-1', SPAM_CHANNEL_ID);
 
     expect(result.handled).toBe(true);
     expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
@@ -81,7 +84,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    await handleInboundEmail(db, resend, poster, 'email-mid');
+    await handleInboundEmail(db, resend, poster, 'email-mid', SPAM_CHANNEL_ID);
 
     const thread = await resolveThreadByDiscordMessageId(db, 'discord-msg-1');
     expect(thread?.emailMessageId).toBe('<sdk-field@x>');
@@ -103,7 +106,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const result = await handleInboundEmail(db, resend, poster, 'email-case');
+    const result = await handleInboundEmail(db, resend, poster, 'email-case', SPAM_CHANNEL_ID);
     expect(result.handled).toBe(true);
     expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.anything());
   });
@@ -124,7 +127,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const result = await handleInboundEmail(db, resend, poster, 'email-display');
+    const result = await handleInboundEmail(db, resend, poster, 'email-display', SPAM_CHANNEL_ID);
     expect(result.handled).toBe(true);
   });
 
@@ -144,7 +147,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const result = await handleInboundEmail(db, resend, poster, 'email-bcc');
+    const result = await handleInboundEmail(db, resend, poster, 'email-bcc', SPAM_CHANNEL_ID);
     expect(result.handled).toBe(true);
   });
 
@@ -167,7 +170,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    await handleInboundEmail(db, resend, poster, 'email-big');
+    await handleInboundEmail(db, resend, poster, 'email-big', SPAM_CHANNEL_ID);
 
     expect(resend.getAttachmentDownloadUrl).toHaveBeenCalledTimes(1);
     expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
@@ -199,7 +202,7 @@ describe('handleInboundEmail', () => {
       .mockRejectedValueOnce(new Error('network error'))
       .mockResolvedValueOnce(Buffer.from('ok-bytes'));
 
-    await handleInboundEmail(db, resend, poster, 'email-mixed');
+    await handleInboundEmail(db, resend, poster, 'email-mixed', SPAM_CHANNEL_ID);
 
     expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
       attachments: [{ filename: 'ok.pdf', content: Buffer.from('ok-bytes') }],
@@ -224,7 +227,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    await handleInboundEmail(db, resend, poster, 'email-long');
+    await handleInboundEmail(db, resend, poster, 'email-long', SPAM_CHANNEL_ID);
 
     const call = (poster.postEmailMessage as ReturnType<typeof vi.fn>).mock.calls[0][1];
     expect(call.bodyPreview.length).toBeLessThanOrEqual(1800);
@@ -245,7 +248,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    await handleInboundEmail(db, resend, poster, 'email-2');
+    await handleInboundEmail(db, resend, poster, 'email-2', SPAM_CHANNEL_ID);
 
     expect(poster.postEmailMessage).toHaveBeenCalledWith('chan-1', expect.objectContaining({
       bodyPreview: 'HTML only',
@@ -268,14 +271,90 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const first = await handleInboundEmail(db, resend, poster, 'email-dup');
-    const second = await handleInboundEmail(db, resend, poster, 'email-dup');
+    const first = await handleInboundEmail(db, resend, poster, 'email-dup', SPAM_CHANNEL_ID);
+    const second = await handleInboundEmail(db, resend, poster, 'email-dup', SPAM_CHANNEL_ID);
 
     expect(first.handled).toBe(true);
     expect(second.handled).toBe(false);
     expect(second.reason).toMatch(/already processed/);
     expect(poster.postEmailMessage).toHaveBeenCalledTimes(1);
     expect(resend.getReceivedEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('redirects mail from a blocked sender to the spam channel and flags it', async () => {
+    await blockSender(db, { emailAddress: 'spammer@example.com', createdBy: 'user-1' });
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-blocked',
+        from: 'Spammer <spammer@example.com>',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<blocked@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-blocked', SPAM_CHANNEL_ID);
+
+    expect(result).toEqual({ handled: true, filtered: 'blocked' });
+    expect(poster.postEmailMessage).toHaveBeenCalledWith(
+      SPAM_CHANNEL_ID,
+      expect.objectContaining({ flagReason: expect.stringContaining('spammer@example.com') }),
+    );
+  });
+
+  it('redirects mail matching a spam keyword to the spam channel and flags it', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-spam',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<spam@x>',
+        subject: '当選しました!今すぐクリック',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-spam', SPAM_CHANNEL_ID);
+
+    expect(result).toEqual({ handled: true, filtered: 'spam' });
+    expect(poster.postEmailMessage).toHaveBeenCalledWith(
+      SPAM_CHANNEL_ID,
+      expect.objectContaining({ flagReason: expect.stringContaining('迷惑メール') }),
+    );
+  });
+
+  it('does not flag ordinary mail and posts it to the bound channel without a flagReason', async () => {
+    const resend = fakeResend({
+      getReceivedEmail: vi.fn().mockResolvedValue({
+        emailId: 'email-clean',
+        from: 'friend@example.com',
+        to: ['tako@octo.jp'],
+        receivedFor: [],
+        messageId: '<clean@x>',
+        subject: 'Hello',
+        text: 'Body',
+        html: '',
+        headers: {},
+        attachments: [],
+      }),
+    });
+
+    const result = await handleInboundEmail(db, resend, poster, 'email-clean', SPAM_CHANNEL_ID);
+
+    expect(result).toEqual({ handled: true });
+    const call = (poster.postEmailMessage as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === 'chan-1',
+    )!;
+    expect(call[1].flagReason).toBeUndefined();
   });
 
   it('reports unhandled when no binding matches any recipient', async () => {
@@ -292,7 +371,7 @@ describe('handleInboundEmail', () => {
       }),
     });
 
-    const result = await handleInboundEmail(db, resend, poster, 'email-3');
+    const result = await handleInboundEmail(db, resend, poster, 'email-3', SPAM_CHANNEL_ID);
     expect(result.handled).toBe(false);
     expect(poster.postEmailMessage).not.toHaveBeenCalled();
   });

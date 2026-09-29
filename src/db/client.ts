@@ -20,6 +20,13 @@ function applySchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS blocked_senders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email_address TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS email_threads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       discord_message_id TEXT NOT NULL UNIQUE,

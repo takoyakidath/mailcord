@@ -14,6 +14,7 @@ describe('loadEnv', () => {
     expect(env.DISCORD_BOT_TOKEN).toBe('token');
     expect(env.DB_PATH).toBe('./data/mailcord.db');
     expect(env.PORT).toBe(8787);
+    expect(env.SPAM_CHANNEL_ID).toBe('1554435622993661972');
   });
 
   it('throws when a required var is missing', () => {

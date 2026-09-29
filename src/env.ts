@@ -7,6 +7,8 @@ const envSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().min(1),
   DB_PATH: z.string().default('./data/mailcord.db'),
   PORT: z.coerce.number().default(8787),
+  // Blocked senders and spam-flagged mail are posted here instead of the bound channel.
+  SPAM_CHANNEL_ID: z.string().min(1).default('1554435622993661972'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -3,6 +3,8 @@ import type { Db } from '../db/client';
 import type { ResendClient } from '../mail/resendClient';
 import { resolveBindingByAddress } from './bindingService';
 import { recordThreadMessage } from './threadService';
+import { isSenderBlocked } from './blocklistService';
+import { classifySpam } from './spamFilter';
 import { extractEmailAddress } from '../mail/address';
 import { stripHtml } from '../util/stripHtml';
 import { fetchAsBuffer } from '../util/fetchBuffer';
@@ -16,7 +18,14 @@ export interface DiscordAttachmentInput {
 export interface DiscordPoster {
   postEmailMessage(
     channelId: string,
-    params: { from: string; subject: string; bodyPreview: string; attachments: DiscordAttachmentInput[] },
+    params: {
+      from: string;
+      subject: string;
+      bodyPreview: string;
+      attachments: DiscordAttachmentInput[];
+      /** Set when the mail was redirected here as blocked/suspected spam, for the embed to call out. */
+      flagReason?: string;
+    },
   ): Promise<{ discordMessageId: string }>;
 }
 
@@ -55,7 +64,8 @@ export async function handleInboundEmail(
   resend: ResendClient,
   poster: DiscordPoster,
   emailId: string,
-): Promise<{ handled: boolean; reason?: string }> {
+  spamChannelId: string,
+): Promise<{ handled: boolean; reason?: string; filtered?: 'blocked' | 'spam' }> {
   if (await alreadyProcessed(db, emailId)) {
     return { handled: false, reason: `email ${emailId} was already processed` };
   }
@@ -108,11 +118,24 @@ export async function handleInboundEmail(
   const suffix = notes.length > 0 ? `\n\n${notes.join('\n')}` : '';
   const bodyPreview = rawBody.slice(0, BODY_PREVIEW_MAX_LENGTH - suffix.length) + suffix;
 
-  const { discordMessageId } = await poster.postEmailMessage(binding.discordChannelId, {
+  const senderAddress = extractEmailAddress(email.from);
+  const blocked = await isSenderBlocked(db, senderAddress);
+  const spamCheck = blocked ? null : classifySpam({ subject: email.subject, text: rawBody });
+  const filtered: 'blocked' | 'spam' | undefined = blocked ? 'blocked' : spamCheck?.isSpam ? 'spam' : undefined;
+
+  const targetChannelId = filtered ? spamChannelId : binding.discordChannelId;
+  const flagReason = blocked
+    ? `ブロック済みの送信者です: ${senderAddress}`
+    : spamCheck?.isSpam
+      ? `迷惑メールの疑いがあります (${spamCheck.reasons.join(', ')})`
+      : undefined;
+
+  const { discordMessageId } = await poster.postEmailMessage(targetChannelId, {
     from: email.from,
     subject: email.subject,
     bodyPreview,
     attachments,
+    ...(flagReason ? { flagReason } : {}),
   });
 
   // The SDK exposes the real Message-ID as a first-class field; header casing is only a fallback.
@@ -126,7 +149,7 @@ export async function handleInboundEmail(
   await recordThreadMessage(db, {
     discordMessageId,
     bindingId: binding.id,
-    externalAddress: extractEmailAddress(email.from),
+    externalAddress: senderAddress,
     subject: email.subject,
     emailMessageId: messageIdHeader,
     inReplyTo: email.headers['In-Reply-To'] ?? null,
@@ -136,5 +159,5 @@ export async function handleInboundEmail(
 
   await markProcessed(db, emailId);
 
-  return { handled: true };
+  return filtered ? { handled: true, filtered } : { handled: true };
 }

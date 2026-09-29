@@ -34,6 +34,7 @@ cp .env.example .env
 | `RESEND_WEBHOOK_SECRET` | Resendのinbound webhook署名シークレット(`whsec_...`) |
 | `DB_PATH` | SQLiteファイルのパス(省略時 `./data/mailcord.db`) |
 | `PORT` | HTTPサーバーのポート(省略時 `8787`) |
+| `SPAM_CHANNEL_ID` | ブロック済み送信者・迷惑メール判定されたメールの転送先チャンネルID(省略時 `1554435622993661972`) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnelのトークン(Docker Compose利用時のみ必要。下記「5. デプロイ」参照) |
 
 ### 2. Discord Bot側の設定
@@ -96,8 +97,15 @@ npm run typecheck  # 型チェック
 | `/mail unbind` | チャンネル管理権限 | バインド解除 |
 | `/mail list` | 誰でも | サーバー内のバインド一覧 |
 | `/mail send to:<email> subject:<件名> body:<本文> [attachment]` | バインド済チャンネルのみ | 新規メール送信 |
+| `/mail block add address:<email>` | チャンネル管理権限 | 送信元アドレスをブロックする |
+| `/mail block remove address:<email>` | チャンネル管理権限 | ブロックを解除する |
+| `/mail block list` | 誰でも | ブロック中の送信者一覧を表示 |
 
 バインド済チャンネルに届いたメールへの返信は、そのメッセージにDiscordの **reply** で行う。reply以外の通常投稿はメール送信されない。
+
+## 迷惑メール判定・送信元ブロック
+
+受信メールは簡易的なキーワード/パターンベースのヒューリスティックで迷惑メール判定される(`src/services/spamFilter.ts`)。判定に引っかかったメール、および `/mail block` でブロックした送信者からのメールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` で指定したチャンネルにembedで転送され、検知理由が併記される。
 
 ## スコープ外(v1)
 

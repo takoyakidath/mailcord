@@ -18,7 +18,7 @@ async function main() {
 
   const bot = createBotClient(db, resend);
   const poster = createDiscordPoster(bot);
-  const server = createServer(db, resend, poster, env.RESEND_WEBHOOK_SECRET);
+  const server = createServer(db, resend, poster, env.RESEND_WEBHOOK_SECRET, env.SPAM_CHANNEL_ID);
 
   await bot.login(env.DISCORD_BOT_TOKEN);
   await server.listen({ host: '0.0.0.0', port: env.PORT });

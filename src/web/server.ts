@@ -9,6 +9,7 @@ export function createServer(
   resend: ResendClient,
   poster: DiscordPoster,
   webhookSecret: string,
+  spamChannelId: string,
 ): FastifyInstance {
   const app = Fastify({ logger: true });
 
@@ -45,7 +46,7 @@ export function createServer(
 
     let result;
     try {
-      result = await handleInboundEmail(db, resend, poster, event.data.email_id);
+      result = await handleInboundEmail(db, resend, poster, event.data.email_id, spamChannelId);
     } catch (err) {
       // Surface a 500 so Resend retries rather than treating a failure as delivered.
       request.log.error({ err, emailId: event.data.email_id }, 'inbound email handling failed');

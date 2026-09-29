@@ -17,12 +17,13 @@ function signSvix(secret: string, id: string, timestamp: string, payload: string
 
 describe('POST /webhooks/resend/inbound', () => {
   const secret = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw';
+  const spamChannelId = 'spam-chan';
 
   it('returns 401 when the signature is invalid', async () => {
     const db = createDb(':memory:');
     const resend = { verifyWebhookSignature: vi.fn().mockResolvedValue(null) } as unknown as ResendClient;
     const poster = { postEmailMessage: vi.fn() } as unknown as DiscordPoster;
-    const app = createServer(db, resend, poster, secret);
+    const app = createServer(db, resend, poster, secret, spamChannelId);
 
     const response = await app.inject({
       method: 'POST',
@@ -51,7 +52,7 @@ describe('POST /webhooks/resend/inbound', () => {
       sendEmail: vi.fn(),
     } as unknown as ResendClient;
     const poster = { postEmailMessage: vi.fn() } as unknown as DiscordPoster;
-    const app = createServer(db, resend, poster, secret);
+    const app = createServer(db, resend, poster, secret, spamChannelId);
 
     const response = await app.inject({
       method: 'POST',
@@ -121,7 +122,7 @@ describe('POST /webhooks/resend/inbound', () => {
       sendEmail: vi.fn(),
     } as unknown as ResendClient;
     const poster = { postEmailMessage: vi.fn().mockResolvedValue({ discordMessageId: 'discord-msg-1' }) } as unknown as DiscordPoster;
-    const app = createServer(db, resend, poster, secret);
+    const app = createServer(db, resend, poster, secret, spamChannelId);
 
     const response = await app.inject({
       method: 'POST',

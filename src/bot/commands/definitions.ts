@@ -27,4 +27,22 @@ export const mailCommand = new SlashCommandBuilder()
       .addStringOption((opt) => opt.setName('subject').setDescription('件名').setRequired(true))
       .addStringOption((opt) => opt.setName('body').setDescription('本文').setRequired(true))
       .addAttachmentOption((opt) => opt.setName('attachment').setDescription('添付ファイル').setRequired(false)),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('block')
+      .setDescription('送信元アドレスのブロック管理')
+      .addSubcommand((sub) =>
+        sub
+          .setName('add')
+          .setDescription('指定したアドレスをブロックする(受信メールは迷惑メールチャンネルに転送される)')
+          .addStringOption((opt) => opt.setName('address').setDescription('ブロックするメールアドレス').setRequired(true)),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('remove')
+          .setDescription('指定したアドレスのブロックを解除する')
+          .addStringOption((opt) => opt.setName('address').setDescription('ブロック解除するメールアドレス').setRequired(true)),
+      )
+      .addSubcommand((sub) => sub.setName('list').setDescription('ブロック中の送信者一覧を表示する')),
   );
