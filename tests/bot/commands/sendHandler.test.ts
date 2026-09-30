@@ -14,7 +14,7 @@ describe('handleSendCommand', () => {
 
   it('reports success when the send succeeds', async () => {
     const resend = { sendEmail: vi.fn().mockResolvedValue({ id: '<x@y>' }) } as unknown as ResendClient;
-    const result = await handleSendCommand(db, resend, {
+    const result = await handleSendCommand(db, { resend, gmail: null }, {
       discordChannelId: 'chan-1',
       discordMessageId: 'discord-msg-1',
       to: 'friend@example.com',
@@ -26,7 +26,7 @@ describe('handleSendCommand', () => {
 
   it('reports the error when the send fails', async () => {
     const resend = { sendEmail: vi.fn().mockRejectedValue(new Error('rate limited')) } as unknown as ResendClient;
-    const result = await handleSendCommand(db, resend, {
+    const result = await handleSendCommand(db, { resend, gmail: null }, {
       discordChannelId: 'chan-1',
       discordMessageId: 'discord-msg-2',
       to: 'friend@example.com',

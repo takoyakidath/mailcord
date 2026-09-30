@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createDb, type Db } from '../../src/db/client';
+import { gmailAccounts } from '../../src/db/schema';
 import {
   createBinding,
   removeBinding,
@@ -63,5 +65,38 @@ describe('bindingService', () => {
     expect(await removeBinding(db, 'chan-1')).toBe(true);
     expect(await resolveBindingByChannel(db, 'chan-1')).toBeNull();
     expect(await removeBinding(db, 'chan-1')).toBe(false);
+  });
+
+  it('defaults to provider=resend but accepts provider=gmail', async () => {
+    const resend = await createBinding(db, { emailAddress: 'tako@octo.jp', discordGuildId: 'g1', discordChannelId: 'chan-1', createdBy: 'u1' });
+    expect(resend.provider).toBe('resend');
+
+    const gmail = await createBinding(db, {
+      emailAddress: 'tako@gmail.com',
+      discordGuildId: 'g1',
+      discordChannelId: 'chan-2',
+      createdBy: 'u1',
+      provider: 'gmail',
+    });
+    expect(gmail.provider).toBe('gmail');
+  });
+
+  it('removing a gmail binding also deletes its gmail_accounts row', async () => {
+    const binding = await createBinding(db, {
+      emailAddress: 'tako@gmail.com',
+      discordGuildId: 'g1',
+      discordChannelId: 'chan-1',
+      createdBy: 'u1',
+      provider: 'gmail',
+    });
+    await db.insert(gmailAccounts).values({
+      bindingId: binding.id,
+      encryptedRefreshToken: 'enc-refresh',
+      historyId: '1',
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(await removeBinding(db, 'chan-1')).toBe(true);
+    expect(await db.select().from(gmailAccounts).where(eq(gmailAccounts.bindingId, binding.id))).toEqual([]);
   });
 });

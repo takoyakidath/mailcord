@@ -10,16 +10,18 @@ import type { Db } from '../db/client';
 import type { ResendClient } from '../mail/resendClient';
 import type { DiscordPoster } from '../services/inboundEmailService';
 import { handleBindCommand, handleUnbindCommand, handleListCommand } from './commands/bindHandler';
+import { handleBindGmailCommand } from './commands/gmailBindHandler';
 import { handleSendCommand } from './commands/sendHandler';
 import { handleBlockAddCommand, handleBlockRemoveCommand, handleBlockListCommand } from './commands/blockHandler';
 import { classifyIncomingMessage } from './replyDetection';
-import { sendReplyEmail } from '../services/outboundEmailService';
+import { sendReplyEmail, type GmailProvider, type OutboundProviders } from '../services/outboundEmailService';
 import { fetchAsBuffer } from '../util/fetchBuffer';
 
 const GENERIC_ERROR_REPLY = 'エラーが発生しました。もう一度お試しください。';
 const MANAGE_CHANNELS_REQUIRED = 'このコマンドにはチャンネル管理権限が必要です。';
 
-export function createBotClient(db: Db, resend: ResendClient): Client {
+export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvider | null): Client {
+  const providers: OutboundProviders = { resend, gmail };
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
@@ -30,7 +32,9 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
     try {
       const group = interaction.options.getSubcommandGroup(false);
       const sub = interaction.options.getSubcommand();
-      await interaction.deferReply();
+      // The OAuth link is personal to whoever ran the command and short-lived; every other
+      // subcommand keeps today's non-ephemeral behavior.
+      await interaction.deferReply({ ephemeral: sub === 'bind-gmail' });
 
       if (group === 'block') {
         // Same policy as bind/unbind: adding/removing a block needs channel-management
@@ -62,13 +66,23 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
         return;
       }
 
-      if (sub === 'bind' || sub === 'unbind') {
+      if (sub === 'bind' || sub === 'unbind' || sub === 'bind-gmail') {
         // Spec: bind/unbind require channel-management permission; list/send are open to anyone.
         // `memberPermissions` is null outside a guild, so this also rejects DM invocations.
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
           await interaction.editReply(MANAGE_CHANNELS_REQUIRED);
           return;
         }
+      }
+
+      if (sub === 'bind-gmail') {
+        const result = await handleBindGmailCommand(db, gmail, {
+          discordGuildId: interaction.guildId!,
+          discordChannelId: interaction.channelId,
+          requestedBy: interaction.user.id,
+        });
+        await interaction.editReply(result.replyText);
+        return;
       }
 
       if (sub === 'bind') {
@@ -107,7 +121,7 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
           : [];
 
         const reply = await interaction.editReply('送信中...');
-        const result = await handleSendCommand(db, resend, {
+        const result = await handleSendCommand(db, providers, {
           discordChannelId: interaction.channelId,
           discordMessageId: reply.id,
           to,
@@ -152,7 +166,7 @@ export function createBotClient(db: Db, resend: ResendClient): Client {
         intent.attachments.map(async (a) => ({ filename: a.filename, content: await fetchAsBuffer(a.url) })),
       );
 
-      const result = await sendReplyEmail(db, resend, {
+      const result = await sendReplyEmail(db, providers, {
         discordChannelId: message.channelId,
         discordMessageId: message.id,
         repliedToDiscordMessageId: intent.repliedToDiscordMessageId,
@@ -208,6 +222,30 @@ export function createDiscordPoster(client: Client): DiscordPoster {
         embeds: [embed],
         files: params.attachments.map((a) => ({ attachment: a.content, name: a.filename })),
       });
+      return { discordMessageId: message.id };
+    },
+
+    async postGmailMessage(channelId, params) {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !(channel instanceof TextChannel)) {
+        throw new Error(`channel ${channelId} is not a text channel`);
+      }
+      // No .setDescription/.setImage/files here by design — Gmail-sourced mail is personal, so
+      // the embed intentionally carries only subject/sender/link, never body text or attachments.
+      const embed = new EmbedBuilder()
+        .setTitle(truncateForEmbed(params.subject || '(件名なし)'))
+        .setURL(params.viewUrl)
+        .setAuthor({ name: truncateForEmbed(params.from) });
+      const message = await channel.send({ embeds: [embed] });
+      return { discordMessageId: message.id };
+    },
+
+    async postSystemMessage(channelId, text) {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !(channel instanceof TextChannel)) {
+        throw new Error(`channel ${channelId} is not a text channel`);
+      }
+      const message = await channel.send(text);
       return { discordMessageId: message.id };
     },
   };

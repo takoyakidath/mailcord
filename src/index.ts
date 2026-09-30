@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { loadEnv } from './env';
 import { createDbWithHandle } from './db/client';
 import { createResendClient } from './mail/resendClient';
+import { createGmailClient } from './mail/gmailClient';
+import type { GmailProvider } from './services/outboundEmailService';
+import { pollAllGmailBindings } from './services/gmailPollingService';
 import { createServer } from './web/server';
 import { createBotClient, createDiscordPoster } from './bot/client';
 
@@ -16,20 +19,39 @@ async function main() {
   const { db, sqlite } = createDbWithHandle(env.DB_PATH);
   const resend = createResendClient(env.RESEND_API_KEY);
 
-  const bot = createBotClient(db, resend);
+  const gmail: GmailProvider | null = env.GMAIL_CLIENT_ID
+    ? {
+        client: createGmailClient(env.GMAIL_CLIENT_ID, env.GMAIL_CLIENT_SECRET!, env.GMAIL_OAUTH_REDIRECT_URI!),
+        tokenEncryptionKey: env.GMAIL_TOKEN_ENCRYPTION_KEY!,
+      }
+    : null;
+
+  const bot = createBotClient(db, resend, gmail);
   const poster = createDiscordPoster(bot);
-  const server = createServer(db, resend, poster, env.RESEND_WEBHOOK_SECRET, env.SPAM_CHANNEL_ID);
+  const server = createServer(db, resend, poster, env.RESEND_WEBHOOK_SECRET, env.SPAM_CHANNEL_ID, gmail);
 
   await bot.login(env.DISCORD_BOT_TOKEN);
   await server.listen({ host: '0.0.0.0', port: env.PORT });
 
   console.log(`mailcord listening on :${env.PORT}`);
 
+  // This project has no other scheduled jobs; Gmail inbound uses polling rather than Pub/Sub
+  // push specifically so it doesn't need any infrastructure beyond this in-process interval.
+  let pollTimer: NodeJS.Timeout | null = null;
+  if (gmail) {
+    pollTimer = setInterval(() => {
+      pollAllGmailBindings(db, gmail.client, gmail.tokenEncryptionKey, poster).catch((err) => {
+        console.error('gmail polling tick failed:', err);
+      });
+    }, env.GMAIL_POLL_INTERVAL_MS);
+  }
+
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`Received ${signal}, shutting down...`);
+    if (pollTimer) clearInterval(pollTimer);
     try {
       await server.close();
     } catch (err) {

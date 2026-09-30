@@ -36,6 +36,8 @@ cp .env.example .env
 | `PORT` | HTTPサーバーのポート(省略時 `8787`) |
 | `SPAM_CHANNEL_ID` | ブロック済み送信者・迷惑メール判定されたメールの転送先チャンネルID(省略時 `1554435622993661972`) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnelのトークン(Docker Compose利用時のみ必要。下記「5. デプロイ」参照) |
+| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI` / `GMAIL_TOKEN_ENCRYPTION_KEY` | Gmail連携を使う場合のみ、4つすべて設定する(下記「Gmail連携」参照) |
+| `GMAIL_POLL_INTERVAL_MS` | Gmailの新着メールをポーリングする間隔・ミリ秒(省略時 `60000`) |
 
 ### 2. Discord Bot側の設定
 
@@ -100,12 +102,34 @@ npm run typecheck  # 型チェック
 | `/mail block add address:<email>` | チャンネル管理権限 | 送信元アドレスをブロックする |
 | `/mail block remove address:<email>` | チャンネル管理権限 | ブロックを解除する |
 | `/mail block list` | 誰でも | ブロック中の送信者一覧を表示 |
+| `/mail bind-gmail` | チャンネル管理権限 | このチャンネルを自分のGmailアカウントにバインドする(Google OAuth認可、下記「Gmail連携」参照) |
 
 バインド済チャンネルに届いたメールへの返信は、そのメッセージにDiscordの **reply** で行う。reply以外の通常投稿はメール送信されない。
 
+## Gmail連携(任意)
+
+独自ドメインを持たない個人のGmailアドレスをチャンネルにバインドしたい場合、`/mail bind` (Resend)ではなく `/mail bind-gmail` を使う。Resendの独自ドメイン検証とは別の仕組みで、Google OAuth2 + Gmail APIで直接そのGmailアカウントに接続する。
+
+**設定手順:**
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成し、Gmail APIを有効化する。
+2. OAuth同意画面を設定し(テストユーザーとして自分のGmailアドレスを追加すれば十分)、OAuth 2.0 クライアントID(種類: ウェブアプリケーション)を作成する。承認済みのリダイレクトURIに `https://<自分のサブドメイン>/oauth/gmail/callback` を追加する。
+3. `.env` に `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI`(上記と同じURL)を設定する。
+4. `openssl rand -hex 32` で生成した値を `GMAIL_TOKEN_ENCRYPTION_KEY` に設定する(OAuthトークンの暗号化キー。他の用途に使い回さないこと)。
+5. Discordで対象チャンネルで `/mail bind-gmail` を実行し、返信されたリンクからGoogleアカウントを認可する。
+
+**動作の違い(Resendバインドとの比較):**
+
+- 受信は約 `GMAIL_POLL_INTERVAL_MS` ミリ秒間隔のポーリング(Gmail History API)。Pub/Subのようなpush通知は使わない。
+- Gmail由来の受信メールは、個人のメールという性質上、Discordのembedに **件名・差出人・Gmailで開くリンクのみ** を表示する(本文プレビュー・添付ファイルは表示しない)。Resendバインドの既存の埋め込み(本文プレビューあり)とは意図的に異なる。
+- OAuthのリフレッシュ/アクセストークンはSQLite内にAES-256-GCMで暗号化して保存する。
+- `/mail unbind` はGmailバインドにも共通で使え、紐づくOAuthトークンも削除される。
+
 ## 迷惑メール判定・送信元ブロック
 
-受信メールは簡易的なキーワード/パターンベースのヒューリスティックで迷惑メール判定される(`src/services/spamFilter.ts`)。判定に引っかかったメール、および `/mail block` でブロックした送信者からのメールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` で指定したチャンネルにembedで転送され、検知理由が併記される。
+Resend経由の受信メールは簡易的なキーワード/パターンベースのヒューリスティックで迷惑メール判定される(`src/services/spamFilter.ts`)。判定に引っかかったメール、および `/mail block` でブロックした送信者からのメールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` で指定したチャンネルにembedで転送され、検知理由が併記される。
+
+`/mail block` の送信元ブロックはGmail由来の受信にも共通で適用される(Gmail自体のスパム判定を通り抜けて届いたメールが対象)。一方、キーワードヒューリスティックはGmail受信には適用しない(Gmail自体のスパム判定に委ねる)。
 
 ## スコープ外(v1)
 

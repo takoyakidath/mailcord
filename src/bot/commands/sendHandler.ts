@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client';
-import type { ResendClient, OutboundAttachment } from '../../mail/resendClient';
-import { sendNewEmail } from '../../services/outboundEmailService';
+import type { OutboundAttachment } from '../../mail/resendClient';
+import { sendNewEmail, type OutboundProviders } from '../../services/outboundEmailService';
 import type { CommandResult } from './types';
 
 export interface SendCommandInput {
@@ -12,8 +12,8 @@ export interface SendCommandInput {
   attachments?: OutboundAttachment[];
 }
 
-export async function handleSendCommand(db: Db, resend: ResendClient, input: SendCommandInput): Promise<CommandResult> {
-  const result = await sendNewEmail(db, resend, input);
+export async function handleSendCommand(db: Db, providers: OutboundProviders, input: SendCommandInput): Promise<CommandResult> {
+  const result = await sendNewEmail(db, providers, input);
   if (!result.ok) {
     return { replyText: `送信に失敗しました: ${result.error}` };
   }

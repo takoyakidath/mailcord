@@ -10,6 +10,12 @@ services:
       - DB_PATH=/app/data/mailcord.db
       - PORT=8787
       - NODE_OPTIONS=--dns-result-order=ipv4first
+      # Optional: leave unset in .env to keep Gmail bind disabled (env.ts treats a blank
+      # substitution the same as an absent var).
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_OAUTH_REDIRECT_URI=${GMAIL_OAUTH_REDIRECT_URI}
+      - GMAIL_TOKEN_ENCRYPTION_KEY=${GMAIL_TOKEN_ENCRYPTION_KEY}
     volumes:
       - mailcord_data:/app/data
     expose:

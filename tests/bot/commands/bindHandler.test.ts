@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDb, type Db } from '../../../src/db/client';
+import { createBinding } from '../../../src/services/bindingService';
 import { handleBindCommand, handleUnbindCommand, handleListCommand } from '../../../src/bot/commands/bindHandler';
 
 describe('bind/unbind/list command handlers', () => {
@@ -89,5 +90,16 @@ describe('bind/unbind/list command handlers', () => {
   it('list reports when there are no bindings', async () => {
     const result = await handleListCommand(db, { discordGuildId: 'empty-guild' });
     expect(result.replyText).toContain('ありません');
+  });
+
+  it('list marks a Gmail binding with a (Gmail) suffix and leaves a Resend one unmarked', async () => {
+    await createBinding(db, { emailAddress: 'tako@octo.jp', discordGuildId: 'g1', discordChannelId: 'chan-1', createdBy: 'u1' });
+    await createBinding(db, { emailAddress: 'tai@gmail.com', discordGuildId: 'g1', discordChannelId: 'chan-2', createdBy: 'u1', provider: 'gmail' });
+
+    const result = await handleListCommand(db, { discordGuildId: 'g1' });
+
+    expect(result.replyText).toContain('<#chan-1> ⇔ `tako@octo.jp`');
+    expect(result.replyText).not.toContain('`tako@octo.jp` (Gmail)');
+    expect(result.replyText).toContain('<#chan-2> ⇔ `tai@gmail.com` (Gmail)');
   });
 });

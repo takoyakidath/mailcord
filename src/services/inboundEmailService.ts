@@ -27,6 +27,15 @@ export interface DiscordPoster {
       flagReason?: string;
     },
   ): Promise<{ discordMessageId: string }>;
+  // Deliberately a separate, narrower method rather than postEmailMessage + a "hide body" flag:
+  // its param type has no bodyPreview/attachments fields at all, so omitting personal Gmail
+  // content from the embed is a compile-time property of the type, not a runtime flag a future
+  // edit could forget to check.
+  postGmailMessage(
+    channelId: string,
+    params: { subject: string; from: string; viewUrl: string },
+  ): Promise<{ discordMessageId: string }>;
+  postSystemMessage(channelId: string, text: string): Promise<{ discordMessageId: string }>;
 }
 
 const BODY_PREVIEW_MAX_LENGTH = 1800;
@@ -155,6 +164,7 @@ export async function handleInboundEmail(
     inReplyTo: email.headers['In-Reply-To'] ?? null,
     referencesChain: email.headers['References'] ?? null,
     direction: 'inbound',
+    gmailThreadId: null,
   });
 
   await markProcessed(db, emailId);

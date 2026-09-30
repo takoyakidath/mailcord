@@ -76,6 +76,8 @@ export async function handleListCommand(db: Db, input: ListInput): Promise<Comma
   if (bindings.length === 0) {
     return { replyText: 'このサーバーにはバインドがありません。' };
   }
-  const lines = bindings.map((b) => `<#${b.discordChannelId}> ⇔ \`${b.emailAddress}\``);
+  const lines = bindings.map(
+    (b) => `<#${b.discordChannelId}> ⇔ \`${b.emailAddress}\`${b.provider === 'gmail' ? ' (Gmail)' : ''}`,
+  );
   return { replyText: lines.join('\n') };
 }

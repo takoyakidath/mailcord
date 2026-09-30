@@ -17,6 +17,9 @@ export const mailCommand = new SlashCommandBuilder()
           .setRequired(false),
       ),
   )
+  .addSubcommand((sub) =>
+    sub.setName('bind-gmail').setDescription('このチャンネルをあなたのGmailアカウントにバインドする(Google認可)'),
+  )
   .addSubcommand((sub) => sub.setName('unbind').setDescription('このチャンネルのバインドを解除する'))
   .addSubcommand((sub) => sub.setName('list').setDescription('このサーバーのバインド一覧を表示する'))
   .addSubcommand((sub) =>
