@@ -5,6 +5,7 @@ import {
   EmbedBuilder,
   TextChannel,
   PermissionFlagsBits,
+  type MessageContextMenuCommandInteraction,
 } from 'discord.js';
 import type { Db } from '../db/client';
 import type { ResendClient } from '../mail/resendClient';
@@ -13,6 +14,8 @@ import { handleBindCommand, handleUnbindCommand, handleListCommand } from './com
 import { handleBindGmailCommand } from './commands/gmailBindHandler';
 import { handleSendCommand } from './commands/sendHandler';
 import { handleBlockAddCommand, handleBlockRemoveCommand, handleBlockListCommand } from './commands/blockHandler';
+import { handleReportSpamCommand } from './commands/reportSpamHandler';
+import { REPORT_SPAM_COMMAND_NAME } from './commands/definitions';
 import { classifyIncomingMessage } from './replyDetection';
 import { sendReplyEmail, type GmailProvider, type OutboundProviders } from '../services/outboundEmailService';
 import { fetchAsBuffer } from '../util/fetchBuffer';
@@ -20,13 +23,17 @@ import { fetchAsBuffer } from '../util/fetchBuffer';
 const GENERIC_ERROR_REPLY = 'エラーが発生しました。もう一度お試しください。';
 const MANAGE_CHANNELS_REQUIRED = 'このコマンドにはチャンネル管理権限が必要です。';
 
-export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvider | null): Client {
+export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvider | null, spamChannelId: string): Client {
   const providers: OutboundProviders = { resend, gmail };
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isMessageContextMenuCommand() && interaction.commandName === REPORT_SPAM_COMMAND_NAME) {
+      await handleReportSpamInteraction(interaction, db, spamChannelId);
+      return;
+    }
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'mail') return;
 
     try {
@@ -192,6 +199,62 @@ export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvid
   });
 
   return client;
+}
+
+async function handleReportSpamInteraction(
+  interaction: MessageContextMenuCommandInteraction,
+  db: Db,
+  spamChannelId: string,
+): Promise<void> {
+  try {
+    await interaction.deferReply({ ephemeral: true });
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+      await interaction.editReply(MANAGE_CHANNELS_REQUIRED);
+      return;
+    }
+
+    const target = interaction.targetMessage;
+    const result = await handleReportSpamCommand(db, {
+      discordMessageId: target.id,
+      requestedBy: interaction.user.id,
+    });
+    if (!result.ok) {
+      await interaction.editReply(result.replyText);
+      return;
+    }
+
+    // Move the reported mail out of the bound channel: repost it in the spam channel, then delete
+    // the original. Skipped when it is already there (e.g. reporting a forwarded blocked mail).
+    if (target.channelId !== spamChannelId) {
+      const spamChannel = await interaction.client.channels.fetch(spamChannelId);
+      if (!spamChannel || !(spamChannel instanceof TextChannel)) {
+        throw new Error(`spam channel ${spamChannelId} is not a text channel`);
+      }
+      const embeds = target.embeds.map((e) =>
+        EmbedBuilder.from(e)
+          .setColor(0xed4245)
+          .addFields({ name: '⚠️ 検知理由', value: `<@${interaction.user.id}> が迷惑メールとして報告しました` }),
+      );
+      await spamChannel.send({
+        embeds,
+        files: [...target.attachments.values()].map((a) => ({ attachment: a.url, name: a.name })),
+      });
+      await target.delete();
+    }
+
+    await interaction.editReply(result.replyText);
+  } catch (err) {
+    console.error('report spam handler failed:', err);
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(GENERIC_ERROR_REPLY);
+      } else {
+        await interaction.reply({ content: GENERIC_ERROR_REPLY, ephemeral: true });
+      }
+    } catch (replyErr) {
+      console.error('failed to report interaction error to Discord:', replyErr);
+    }
+  }
 }
 
 // Discord rejects embed titles and author names longer than 256 characters, and EmbedBuilder

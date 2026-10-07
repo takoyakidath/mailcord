@@ -307,32 +307,7 @@ describe('handleInboundEmail', () => {
     );
   });
 
-  it('redirects mail matching a spam keyword to the spam channel and flags it', async () => {
-    const resend = fakeResend({
-      getReceivedEmail: vi.fn().mockResolvedValue({
-        emailId: 'email-spam',
-        from: 'friend@example.com',
-        to: ['tako@octo.jp'],
-        receivedFor: [],
-        messageId: '<spam@x>',
-        subject: '当選しました!今すぐクリック',
-        text: 'Body',
-        html: '',
-        headers: {},
-        attachments: [],
-      }),
-    });
-
-    const result = await handleInboundEmail(db, resend, poster, 'email-spam', SPAM_CHANNEL_ID);
-
-    expect(result).toEqual({ handled: true, filtered: 'spam' });
-    expect(poster.postEmailMessage).toHaveBeenCalledWith(
-      SPAM_CHANNEL_ID,
-      expect.objectContaining({ flagReason: expect.stringContaining('迷惑メール') }),
-    );
-  });
-
-  it('does not flag ordinary mail and posts it to the bound channel without a flagReason', async () => {
+  it('does not auto-flag spam-looking mail from an unblocked sender (spam is only reported manually)', async () => {
     const resend = fakeResend({
       getReceivedEmail: vi.fn().mockResolvedValue({
         emailId: 'email-clean',
@@ -340,7 +315,7 @@ describe('handleInboundEmail', () => {
         to: ['tako@octo.jp'],
         receivedFor: [],
         messageId: '<clean@x>',
-        subject: 'Hello',
+        subject: '当選しました!!! CLICK HERE NOW',
         text: 'Body',
         html: '',
         headers: {},

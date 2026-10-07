@@ -26,7 +26,7 @@ async function main() {
       }
     : null;
 
-  const bot = createBotClient(db, resend, gmail);
+  const bot = createBotClient(db, resend, gmail, env.SPAM_CHANNEL_ID);
   const poster = createDiscordPoster(bot);
   const server = createServer(db, resend, poster, env.RESEND_WEBHOOK_SECRET, env.SPAM_CHANNEL_ID, gmail);
 

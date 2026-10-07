@@ -1,4 +1,9 @@
-import { SlashCommandBuilder } from 'discord.js';
+import {
+  ApplicationCommandType,
+  ContextMenuCommandBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
 
 export const mailCommand = new SlashCommandBuilder()
   .setName('mail')
@@ -49,3 +54,13 @@ export const mailCommand = new SlashCommandBuilder()
       )
       .addSubcommand((sub) => sub.setName('list').setDescription('ブロック中の送信者一覧を表示する')),
   );
+
+export const REPORT_SPAM_COMMAND_NAME = '迷惑メールとして報告';
+
+// Right-click a received-mail message → アプリ → this. Hidden from members without
+// channel-management permission (the handler re-checks, since server admins can override this).
+export const reportSpamCommand = new ContextMenuCommandBuilder()
+  .setName(REPORT_SPAM_COMMAND_NAME)
+  .setType(ApplicationCommandType.Message)
+  .setDMPermission(false)
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);

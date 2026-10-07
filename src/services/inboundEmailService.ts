@@ -4,7 +4,6 @@ import type { ResendClient } from '../mail/resendClient';
 import { resolveBindingByAddress } from './bindingService';
 import { recordThreadMessage } from './threadService';
 import { isSenderBlocked } from './blocklistService';
-import { classifySpam } from './spamFilter';
 import { extractEmailAddress } from '../mail/address';
 import { stripHtml } from '../util/stripHtml';
 import { fetchAsBuffer } from '../util/fetchBuffer';
@@ -74,7 +73,7 @@ export async function handleInboundEmail(
   poster: DiscordPoster,
   emailId: string,
   spamChannelId: string,
-): Promise<{ handled: boolean; reason?: string; filtered?: 'blocked' | 'spam' }> {
+): Promise<{ handled: boolean; reason?: string; filtered?: 'blocked' }> {
   if (await alreadyProcessed(db, emailId)) {
     return { handled: false, reason: `email ${emailId} was already processed` };
   }
@@ -128,16 +127,11 @@ export async function handleInboundEmail(
   const bodyPreview = rawBody.slice(0, BODY_PREVIEW_MAX_LENGTH - suffix.length) + suffix;
 
   const senderAddress = extractEmailAddress(email.from);
+  // Spam is only ever flagged by a human (the "迷惑メールとして報告" message context menu, or
+  // /mail block), never by content heuristics — those misfired on ordinary mail.
   const blocked = await isSenderBlocked(db, senderAddress);
-  const spamCheck = blocked ? null : classifySpam({ subject: email.subject, text: rawBody });
-  const filtered: 'blocked' | 'spam' | undefined = blocked ? 'blocked' : spamCheck?.isSpam ? 'spam' : undefined;
-
-  const targetChannelId = filtered ? spamChannelId : binding.discordChannelId;
-  const flagReason = blocked
-    ? `ブロック済みの送信者です: ${senderAddress}`
-    : spamCheck?.isSpam
-      ? `迷惑メールの疑いがあります (${spamCheck.reasons.join(', ')})`
-      : undefined;
+  const targetChannelId = blocked ? spamChannelId : binding.discordChannelId;
+  const flagReason = blocked ? `ブロック済みの送信者です: ${senderAddress}` : undefined;
 
   const { discordMessageId } = await poster.postEmailMessage(targetChannelId, {
     from: email.from,
@@ -169,5 +163,5 @@ export async function handleInboundEmail(
 
   await markProcessed(db, emailId);
 
-  return filtered ? { handled: true, filtered } : { handled: true };
+  return blocked ? { handled: true, filtered: 'blocked' } : { handled: true };
 }
