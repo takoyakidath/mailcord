@@ -87,6 +87,7 @@ export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvid
           discordGuildId: interaction.guildId!,
           discordChannelId: interaction.channelId,
           requestedBy: interaction.user.id,
+          permission: interaction.options.getString('permission') === 'read_send' ? 'read_send' : 'read_only',
         });
         await interaction.editReply(result.replyText);
         return;

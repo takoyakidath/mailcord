@@ -61,6 +61,9 @@ export const gmailAccounts = sqliteTable('gmail_accounts', {
   // Set when Google rejects the refresh token (invalid_grant). Polling skips revoked accounts
   // until the user re-runs /mail bind-gmail, which creates a fresh account row.
   revokedAt: text('revoked_at'),
+  // OAuth scope granted at bind time. 'read_only' accounts never held gmail.send, so sending is
+  // impossible at the token level; the app also refuses early (see outboundEmailService).
+  permission: text('permission', { enum: ['read_only', 'read_send'] }).notNull().default('read_send'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -74,6 +77,7 @@ export const oauthStates = sqliteTable('oauth_states', {
   discordGuildId: text('discord_guild_id').notNull(),
   discordChannelId: text('discord_channel_id').notNull(),
   requestedBy: text('requested_by').notNull(),
+  permission: text('permission', { enum: ['read_only', 'read_send'] }).notNull().default('read_only'),
   createdAt: text('created_at').notNull(),
   expiresAt: text('expires_at').notNull(),
 });

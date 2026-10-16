@@ -5,6 +5,7 @@ import type { ResendClient } from '../../src/mail/resendClient';
 import type { DiscordPoster } from '../../src/services/inboundEmailService';
 import { createDb } from '../../src/db/client';
 import { createBinding, resolveBindingByChannel } from '../../src/services/bindingService';
+import { gmailAccounts } from '../../src/db/schema';
 import { createOauthState } from '../../src/services/oauthStateService';
 
 // Resend webhook signatures follow the Svix scheme: base64(HMAC-SHA256(secret, `${id}.${timestamp}.${payload}`)),
@@ -201,11 +202,13 @@ describe('GET /oauth/gmail/callback', () => {
     const gmail = fakeGmail();
     const app = createServer(db, resend, poster, secret, spamChannelId, gmail);
 
-    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', requestedBy: 'u1' });
+    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', requestedBy: 'u1', permission: 'read_only' });
 
     const response = await app.inject({ method: 'GET', url: `/oauth/gmail/callback?code=abc&state=${state}` });
 
     expect(response.statusCode).toBe(200);
+    const accounts = await db.select().from(gmailAccounts);
+    expect(accounts[0].permission).toBe('read_only');
     const binding = await resolveBindingByChannel(db, 'chan-1');
     expect(binding?.emailAddress).toBe('tako@gmail.com');
     expect(binding?.provider).toBe('gmail');
@@ -219,7 +222,7 @@ describe('GET /oauth/gmail/callback', () => {
     const gmail = fakeGmail();
     const app = createServer(db, resend, poster, secret, spamChannelId, gmail);
 
-    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', requestedBy: 'u1' });
+    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'chan-1', requestedBy: 'u1', permission: 'read_only' });
     await app.inject({ method: 'GET', url: `/oauth/gmail/callback?code=abc&state=${state}` });
 
     const second = await app.inject({ method: 'GET', url: `/oauth/gmail/callback?code=abc&state=${state}` });

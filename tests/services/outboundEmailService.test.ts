@@ -260,6 +260,7 @@ describe('outboundEmailService', () => {
         accessToken: 'access-1',
         accessTokenExpiresAt: new Date(Date.now() + 3600_000),
         historyId: '1',
+        permission: 'read_send',
       });
 
       const resend = fakeResend();
@@ -285,6 +286,38 @@ describe('outboundEmailService', () => {
 
       const thread = await resolveThreadByDiscordMessageId(db, 'discord-msg-gmail');
       expect(thread?.gmailThreadId).toBe('gmail-thread-1');
+    });
+
+    it('refuses to send from a read_only Gmail binding without calling Gmail', async () => {
+      const binding = await createBinding(db, {
+        emailAddress: 'ro@gmail.com',
+        discordGuildId: 'guild-1',
+        discordChannelId: 'chan-gmail-ro',
+        createdBy: 'user-1',
+        provider: 'gmail',
+      });
+      await createGmailAccount(db, GMAIL_KEY, {
+        bindingId: binding.id,
+        refreshToken: 'refresh-1',
+        accessToken: 'access-1',
+        accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+        historyId: '1',
+        permission: 'read_only',
+      });
+      const gmailClient = { sendRawMessage: vi.fn(), refreshAccessToken: vi.fn() } as unknown as GmailClient;
+
+      const result = await sendNewEmail(db, { resend: fakeResend(), gmail: { client: gmailClient, tokenEncryptionKey: GMAIL_KEY } }, {
+        discordChannelId: 'chan-gmail-ro',
+        discordMessageId: 'discord-msg-ro',
+        to: 'friend@example.com',
+        subject: 'Hi',
+        body: 'Hello',
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.ok === false && result.error).toContain('読み取り専用');
+      expect(gmailClient.sendRawMessage).not.toHaveBeenCalled();
+      expect(gmailClient.refreshAccessToken).not.toHaveBeenCalled();
     });
 
     it('fails with a clear error when Gmail is not configured for this deployment', async () => {

@@ -23,7 +23,19 @@ export const mailCommand = new SlashCommandBuilder()
       ),
   )
   .addSubcommand((sub) =>
-    sub.setName('bind-gmail').setDescription('このチャンネルをあなたのGmailアカウントにバインドする(Google認可)'),
+    sub
+      .setName('bind-gmail')
+      .setDescription('このチャンネルをあなたのGmailアカウントにバインドする(Google認可)')
+      .addStringOption((opt) =>
+        opt
+          .setName('permission')
+          .setDescription('Gmailに要求する権限(省略時は読み取り専用)')
+          .setRequired(false)
+          .addChoices(
+            { name: '読み取り専用', value: 'read_only' },
+            { name: '読み取り+送信', value: 'read_send' },
+          ),
+      ),
   )
   .addSubcommand((sub) => sub.setName('unbind').setDescription('このチャンネルのバインドを解除する'))
   .addSubcommand((sub) => sub.setName('list').setDescription('このサーバーのバインド一覧を表示する'))

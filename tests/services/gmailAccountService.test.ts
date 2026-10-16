@@ -34,6 +34,7 @@ describe('gmailAccountService', () => {
       accessToken: 'access-1',
       accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
       historyId: '100',
+      permission: 'read_send',
     });
     const account = await getGmailAccountByBindingId(db, binding.id);
     const gmail = { refreshAccessToken: vi.fn() } as unknown as GmailClient;
@@ -52,6 +53,7 @@ describe('gmailAccountService', () => {
       accessToken: 'stale-access',
       accessTokenExpiresAt: new Date(Date.now() + 1000), // under the 60s refresh margin
       historyId: '100',
+      permission: 'read_send',
     });
     const account = await getGmailAccountByBindingId(db, binding.id);
     const gmail = {

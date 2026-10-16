@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { eq, lt } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { oauthStates } from '../db/schema';
+import type { GmailPermission } from '../mail/gmailClient';
 
 export type OauthState = typeof oauthStates.$inferSelect;
 
@@ -11,6 +12,7 @@ export interface CreateOauthStateParams {
   discordGuildId: string;
   discordChannelId: string;
   requestedBy: string;
+  permission: GmailPermission;
 }
 
 export async function createOauthState(db: Db, params: CreateOauthStateParams): Promise<string> {

@@ -142,6 +142,7 @@ export function createServer(
       accessToken: tokens.accessToken,
       accessTokenExpiresAt: tokens.expiresAt,
       historyId: profile.historyId,
+      permission: stateRow.permission,
     });
 
     // Best-effort: the person completing this OAuth redirect is looking at their browser, not

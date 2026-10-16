@@ -20,14 +20,14 @@ describe('handleBindGmailCommand', () => {
   });
 
   it('reports that Gmail is not configured when gmail is null', async () => {
-    const result = await handleBindGmailCommand(db, null, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1' });
+    const result = await handleBindGmailCommand(db, null, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1', permission: 'read_only' });
     expect(result.replyText).toContain('設定されていません');
   });
 
   it('rejects a channel that already has a binding', async () => {
     await createBinding(db, { emailAddress: 'tako@octo.jp', discordGuildId: 'g1', discordChannelId: 'c1', createdBy: 'u1' });
 
-    const result = await handleBindGmailCommand(db, fakeGmailProvider(), { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1' });
+    const result = await handleBindGmailCommand(db, fakeGmailProvider(), { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1', permission: 'read_only' });
 
     expect(result.replyText).toContain('既に');
     expect(result.replyText).toContain('unbind');
@@ -35,14 +35,15 @@ describe('handleBindGmailCommand', () => {
 
   it('creates a one-time state row and replies with the Google authorization URL', async () => {
     const gmail = fakeGmailProvider('https://accounts.google.com/o/oauth2/auth?scope=gmail');
-    const result = await handleBindGmailCommand(db, gmail, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1' });
+    const result = await handleBindGmailCommand(db, gmail, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1', permission: 'read_only' });
 
     expect(result.replyText).toContain('https://accounts.google.com/o/oauth2/auth?scope=gmail');
-    expect(gmail.client.buildAuthUrl).toHaveBeenCalledTimes(1);
+    expect(gmail.client.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), 'read_only');
 
     const rows = await db.select().from(oauthStates);
     expect(rows).toHaveLength(1);
     expect(rows[0].discordChannelId).toBe('c1');
+    expect(rows[0].permission).toBe('read_only');
     expect(rows[0].requestedBy).toBe('u1');
   });
 });

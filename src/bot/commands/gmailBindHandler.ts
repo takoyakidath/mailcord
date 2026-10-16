@@ -2,12 +2,14 @@ import type { Db } from '../../db/client';
 import type { GmailProvider } from '../../services/outboundEmailService';
 import { resolveBindingByChannel } from '../../services/bindingService';
 import { createOauthState } from '../../services/oauthStateService';
+import type { GmailPermission } from '../../mail/gmailClient';
 import type { CommandResult } from './types';
 
 export interface BindGmailInput {
   discordGuildId: string;
   discordChannelId: string;
   requestedBy: string;
+  permission: GmailPermission;
 }
 
 export async function handleBindGmailCommand(db: Db, gmail: GmailProvider | null, input: BindGmailInput): Promise<CommandResult> {
@@ -29,10 +31,11 @@ export async function handleBindGmailCommand(db: Db, gmail: GmailProvider | null
     discordGuildId: input.discordGuildId,
     discordChannelId: input.discordChannelId,
     requestedBy: input.requestedBy,
+    permission: input.permission,
   });
-  const authUrl = gmail.client.buildAuthUrl(state);
+  const authUrl = gmail.client.buildAuthUrl(state, input.permission);
 
   return {
-    replyText: `以下のリンクからGoogleアカウントを認可してください(10分間有効・あなただけが使えるリンクです):\n${authUrl}`,
+    replyText: `権限: ${input.permission === 'read_send' ? '読み取り+送信' : '読み取り専用'}\n以下のリンクからGoogleアカウントを認可してください(10分間有効・あなただけが使えるリンクです):\n${authUrl}`,
   };
 }

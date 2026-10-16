@@ -47,6 +47,7 @@ async function bindGmail(db: Db, channelId: string, historyId = '100') {
     accessToken: 'access',
     accessTokenExpiresAt: new Date(Date.now() + 3600_000),
     historyId,
+    permission: 'read_send',
   });
   return binding;
 }

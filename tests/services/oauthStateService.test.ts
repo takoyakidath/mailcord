@@ -11,7 +11,7 @@ describe('oauthStateService', () => {
   });
 
   it('creates then consumes a state row exactly once', async () => {
-    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1' });
+    const state = await createOauthState(db, { discordGuildId: 'g1', discordChannelId: 'c1', requestedBy: 'u1', permission: 'read_only' });
 
     const consumed = await consumeOauthState(db, state);
     expect(consumed?.discordChannelId).toBe('c1');
@@ -48,7 +48,7 @@ describe('oauthStateService', () => {
       createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
       expiresAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     });
-    const freshState = await createOauthState(db, { discordGuildId: 'g2', discordChannelId: 'c2', requestedBy: 'u2' });
+    const freshState = await createOauthState(db, { discordGuildId: 'g2', discordChannelId: 'c2', requestedBy: 'u2', permission: 'read_only' });
 
     await consumeOauthState(db, freshState);
 

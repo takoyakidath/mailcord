@@ -103,7 +103,7 @@ npm run typecheck  # 型チェック
 | `/mail block remove address:<email>` | チャンネル管理権限 | ブロックを解除する |
 | `/mail block list` | 誰でも | ブロック中の送信者一覧を表示 |
 | 受信メールを右クリック → アプリ → `迷惑メールとして報告` | チャンネル管理権限 | 送信者をブロックし、そのメッセージを迷惑メールチャンネルへ移動する |
-| `/mail bind-gmail` | チャンネル管理権限 | このチャンネルを自分のGmailアカウントにバインドする(Google OAuth認可、下記「Gmail連携」参照) |
+| `/mail bind-gmail [permission]` | チャンネル管理権限 | このチャンネルを自分のGmailアカウントにバインドする(Google OAuth認可、下記「Gmail連携」参照)。`permission` は `読み取り専用`(デフォルト)か `読み取り+送信` |
 
 バインド済チャンネルに届いたメールへの返信は、そのメッセージにDiscordの **reply** で行う。reply以外の通常投稿はメール送信されない。
 
@@ -118,6 +118,13 @@ npm run typecheck  # 型チェック
 3. `.env` に `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI`(上記と同じURL)を設定する。
 4. `openssl rand -hex 32` で生成した値を `GMAIL_TOKEN_ENCRYPTION_KEY` に設定する(OAuthトークンの暗号化キー。他の用途に使い回さないこと)。
 5. Discordで対象チャンネルで `/mail bind-gmail` を実行し、返信されたリンクからGoogleアカウントを認可する。
+
+**権限(permission):**
+
+- `/mail bind-gmail` はデフォルトで **読み取り専用**(`gmail.readonly` のみをGoogleに要求)。この場合トークン自体に送信権限が無く、Gmailバインドのチャンネルからは返信も `/mail send` もできない。
+- 送信したい場合のみ `/mail bind-gmail permission:読み取り+送信` を使う(`gmail.send` も要求する)。
+- 権限を変えるには `/mail unbind` してから再バインドする。古い許可はGoogleアカウントの「サードパーティのアクセス」から削除しておくと確実。
+- この機能の導入前にバインドされたアカウントは `gmail.send` を許可済みのため、`読み取り+送信` として扱われる。
 
 **動作の違い(Resendバインドとの比較):**
 

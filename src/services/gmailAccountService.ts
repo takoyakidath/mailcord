@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { gmailAccounts } from '../db/schema';
-import type { GmailClient } from '../mail/gmailClient';
+import type { GmailClient, GmailPermission } from '../mail/gmailClient';
 
 export type GmailAccount = typeof gmailAccounts.$inferSelect;
 
@@ -40,6 +40,7 @@ export interface CreateGmailAccountParams {
   accessToken: string;
   accessTokenExpiresAt: Date;
   historyId: string;
+  permission: GmailPermission;
 }
 
 export async function createGmailAccount(
@@ -56,6 +57,7 @@ export async function createGmailAccount(
       encryptedAccessToken: encryptToken(params.accessToken, encryptionKey),
       accessTokenExpiresAt: params.accessTokenExpiresAt.toISOString(),
       historyId: params.historyId,
+      permission: params.permission,
       createdAt,
     })
     .returning();

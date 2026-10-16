@@ -18,8 +18,10 @@ export interface GmailMessageMetadata {
   references: string | null;
 }
 
+export type GmailPermission = 'read_only' | 'read_send';
+
 export interface GmailClient {
-  buildAuthUrl(state: string): string;
+  buildAuthUrl(state: string, permission: GmailPermission): string;
   exchangeCodeForTokens(code: string): Promise<{ refreshToken: string; accessToken: string; expiresAt: Date }>;
   refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: Date }>;
   getProfile(accessToken: string): Promise<{ emailAddress: string; historyId: string }>;
@@ -29,8 +31,14 @@ export interface GmailClient {
 }
 
 // Least-privilege scopes: readonly (metadata polling never requests format=full/raw, see
-// getMessageMetadata below) + send. Deliberately not the broad `https://mail.google.com/` scope.
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send'];
+// getMessageMetadata below), plus send only when the user opts in at bind time. Deliberately not
+// the broad `https://mail.google.com/` scope.
+const READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+const SCOPES_BY_PERMISSION: Record<GmailPermission, string[]> = {
+  read_only: [READONLY_SCOPE],
+  read_send: [READONLY_SCOPE, SEND_SCOPE],
+};
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const METADATA_HEADERS = ['Subject', 'From', 'Message-ID', 'In-Reply-To', 'References'];
 
@@ -62,14 +70,14 @@ export function createGmailClient(clientId: string, clientSecret: string, redire
   const oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
 
   return {
-    buildAuthUrl(state) {
+    buildAuthUrl(state, permission) {
       return oauth2Client.generateAuthUrl({
         access_type: 'offline',
         // Forces Google to hand back a refresh token even if this Google account has already
         // authorized this app before (otherwise a re-bind after `/mail unbind` could silently
         // fail to get one).
         prompt: 'consent',
-        scope: SCOPES,
+        scope: SCOPES_BY_PERMISSION[permission],
         state,
       });
     },

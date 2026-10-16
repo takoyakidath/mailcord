@@ -90,6 +90,19 @@ function applySchema(sqlite: Database.Database) {
   `);
 
   addColumnIfMissing(sqlite, 'gmail_accounts', 'revoked_at', 'revoked_at TEXT');
+  // Pre-existing accounts were authorized with gmail.send, so 'read_send' reflects what they hold.
+  addColumnIfMissing(
+    sqlite,
+    'gmail_accounts',
+    'permission',
+    `permission TEXT NOT NULL DEFAULT 'read_send' CHECK (permission IN ('read_only','read_send'))`,
+  );
+  addColumnIfMissing(
+    sqlite,
+    'oauth_states',
+    'permission',
+    `permission TEXT NOT NULL DEFAULT 'read_only' CHECK (permission IN ('read_only','read_send'))`,
+  );
 }
 
 // A fresh clone's `data/` directory doesn't exist yet (it's gitignored); Docker's VOLUME

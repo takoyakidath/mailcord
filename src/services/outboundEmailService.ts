@@ -100,6 +100,13 @@ async function sendAndRecord(
       const account = await getGmailAccountByBindingId(db, binding.id);
       if (!account) return { ok: false, error: 'Gmailアカウントの認証情報が見つかりません。/mail unbind の後、再度 /mail bind-gmail してください。' };
 
+      if (account.permission !== 'read_send') {
+        return {
+          ok: false,
+          error: 'このGmailバインドは読み取り専用です。送信するには `/mail unbind` の後、`/mail bind-gmail permission:読み取り+送信` で再バインドしてください。',
+        };
+      }
+
       const accessToken = await getLiveAccessToken(db, providers.gmail.client, providers.gmail.tokenEncryptionKey, account);
       const raw = buildRfc822Message({
         from: params.from,
