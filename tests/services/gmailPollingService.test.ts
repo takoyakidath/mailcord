@@ -155,4 +155,23 @@ describe('gmailPollingService', () => {
 
     expect(poster.postGmailMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('on invalid_grant, notifies the channel once and stops polling that account', async () => {
+    const binding = await bindGmail(db, 'chan-revoked');
+    // force a refresh by expiring the cached access token
+    await db.update((await import('../../src/db/schema')).gmailAccounts).set({ accessTokenExpiresAt: new Date(0).toISOString() });
+    const poster = fakePoster();
+    const gmail = {
+      refreshAccessToken: vi.fn().mockRejectedValue(Object.assign(new Error('invalid_grant'), { response: { data: { error: 'invalid_grant' } } })),
+      listHistory: vi.fn(),
+    } as unknown as GmailClient;
+
+    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster);
+
+    expect(binding).toBeTruthy();
+    expect(gmail.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(poster.postSystemMessage).toHaveBeenCalledTimes(1);
+    expect(poster.postSystemMessage).toHaveBeenCalledWith('chan-revoked', expect.stringContaining('bind-gmail'));
+  });
 });

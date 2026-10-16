@@ -58,6 +58,9 @@ export const gmailAccounts = sqliteTable('gmail_accounts', {
   // this is stored as TEXT and passed through opaquely rather than parsed as a number.
   historyId: text('history_id').notNull(),
   lastPolledAt: text('last_polled_at'),
+  // Set when Google rejects the refresh token (invalid_grant). Polling skips revoked accounts
+  // until the user re-runs /mail bind-gmail, which creates a fresh account row.
+  revokedAt: text('revoked_at'),
   createdAt: text('created_at').notNull(),
 });
 

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { gmailAccounts } from '../db/schema';
 import type { GmailClient } from '../mail/gmailClient';
@@ -68,7 +68,18 @@ export async function getGmailAccountByBindingId(db: Db, bindingId: number): Pro
 }
 
 export async function listGmailAccounts(db: Db): Promise<GmailAccount[]> {
-  return db.select().from(gmailAccounts);
+  return db.select().from(gmailAccounts).where(isNull(gmailAccounts.revokedAt));
+}
+
+// Google answers a dead refresh token (expired, revoked, or the OAuth app is in "Testing" mode
+// and the 7-day limit passed) with a 400 `invalid_grant`. Retrying can never succeed.
+export function isInvalidGrantError(err: unknown): boolean {
+  const e = err as { response?: { data?: { error?: unknown } }; message?: unknown } | null;
+  return e?.response?.data?.error === 'invalid_grant' || (typeof e?.message === 'string' && e.message.includes('invalid_grant'));
+}
+
+export async function markAccountRevoked(db: Db, accountId: number): Promise<void> {
+  await db.update(gmailAccounts).set({ revokedAt: new Date().toISOString() }).where(eq(gmailAccounts.id, accountId));
 }
 
 export async function updateHistoryCursor(db: Db, accountId: number, historyId: string): Promise<void> {

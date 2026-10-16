@@ -88,6 +88,8 @@ function applySchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
   `);
+
+  addColumnIfMissing(sqlite, 'gmail_accounts', 'revoked_at', 'revoked_at TEXT');
 }
 
 // A fresh clone's `data/` directory doesn't exist yet (it's gitignored); Docker's VOLUME

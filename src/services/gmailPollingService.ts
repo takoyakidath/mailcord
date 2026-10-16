@@ -3,7 +3,7 @@ import type { Db } from '../db/client';
 import type { GmailClient, GmailMessageMetadata } from '../mail/gmailClient';
 import type { DiscordPoster } from './inboundEmailService';
 import { processedGmailMessages } from '../db/schema';
-import { listGmailAccounts, updateHistoryCursor, getLiveAccessToken, type GmailAccount } from './gmailAccountService';
+import { listGmailAccounts, updateHistoryCursor, getLiveAccessToken, isInvalidGrantError, markAccountRevoked, type GmailAccount } from './gmailAccountService';
 import { resolveBindingById } from './bindingService';
 import { recordThreadMessage } from './threadService';
 import { isSenderBlocked } from './blocklistService';
@@ -111,7 +111,23 @@ export async function pollAllGmailBindings(
   // isolation already used for Resend inbound.
   await Promise.allSettled(
     accounts.map((account) =>
-      pollOneBinding(db, gmail, tokenEncryptionKey, poster, account).catch((err) => {
+      pollOneBinding(db, gmail, tokenEncryptionKey, poster, account).catch(async (err) => {
+        if (isInvalidGrantError(err)) {
+          // Dead refresh token: stop polling this account (retrying every tick only floods the
+          // logs) and tell the channel once so the user knows to re-authorize.
+          console.warn(`gmail refresh token for binding ${account.bindingId} is expired or revoked; disabling polling`);
+          await markAccountRevoked(db, account.id);
+          const binding = await resolveBindingById(db, account.bindingId);
+          if (binding) {
+            await poster
+              .postSystemMessage(
+                binding.discordChannelId,
+                '⚠️ Gmail連携の認可が失効しました(トークンの期限切れまたは取り消し)。`/mail unbind` の後、`/mail bind-gmail` をやり直してください。',
+              )
+              .catch((postErr) => console.error('failed to post gmail revoked notice:', postErr));
+          }
+          return;
+        }
         console.error(`gmail poll failed for binding ${account.bindingId}:`, err);
       }),
     ),
