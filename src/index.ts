@@ -40,7 +40,7 @@ async function main() {
   let pollTimer: NodeJS.Timeout | null = null;
   if (gmail) {
     pollTimer = setInterval(() => {
-      pollAllGmailBindings(db, gmail.client, gmail.tokenEncryptionKey, poster).catch((err) => {
+      pollAllGmailBindings(db, gmail.client, gmail.tokenEncryptionKey, poster, env.SPAM_CHANNEL_ID).catch((err) => {
         console.error('gmail polling tick failed:', err);
       });
     }, env.GMAIL_POLL_INTERVAL_MS);

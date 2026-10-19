@@ -67,7 +67,7 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn().mockResolvedValue(fakeMetadata()),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(poster.postGmailMessage).toHaveBeenCalledWith('chan-1', {
       subject: 'Hello',
@@ -91,7 +91,7 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn(),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(poster.postGmailMessage).not.toHaveBeenCalled();
     expect(gmail.getProfile).toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('gmailPollingService', () => {
     expect(account?.historyId).toBe('fresh-baseline');
   });
 
-  it('skips a message from a blocked sender', async () => {
+  it('posts a message from a blocked sender to the spam channel with a flag reason', async () => {
     await bindGmail(db, 'chan-1');
     await blockSender(db, { emailAddress: 'spammer@example.com', createdBy: 'u1' });
     const poster = fakePoster();
@@ -108,9 +108,13 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn().mockResolvedValue(fakeMetadata({ from: 'spammer@example.com' })),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
-    expect(poster.postGmailMessage).not.toHaveBeenCalled();
+    expect(poster.postGmailMessage).toHaveBeenCalledTimes(1);
+    expect(poster.postGmailMessage).toHaveBeenCalledWith(
+      'spam-chan',
+      expect.objectContaining({ flagReason: expect.stringContaining('spammer@example.com') }),
+    );
   });
 
   it('skips a message missing the INBOX label (e.g. our own outbound send)', async () => {
@@ -121,7 +125,7 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn().mockResolvedValue(fakeMetadata({ labelIds: ['SENT'] })),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(poster.postGmailMessage).not.toHaveBeenCalled();
   });
@@ -134,8 +138,8 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn().mockResolvedValue(fakeMetadata()),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(poster.postGmailMessage).toHaveBeenCalledTimes(1);
   });
@@ -152,7 +156,7 @@ describe('gmailPollingService', () => {
       getMessageMetadata: vi.fn().mockResolvedValue(fakeMetadata()),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(poster.postGmailMessage).toHaveBeenCalledTimes(1);
   });
@@ -167,8 +171,8 @@ describe('gmailPollingService', () => {
       listHistory: vi.fn(),
     } as unknown as GmailClient;
 
-    await pollAllGmailBindings(db, gmail, KEY, poster);
-    await pollAllGmailBindings(db, gmail, KEY, poster);
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
+    await pollAllGmailBindings(db, gmail, KEY, poster, 'spam-chan');
 
     expect(binding).toBeTruthy();
     expect(gmail.refreshAccessToken).toHaveBeenCalledTimes(1);

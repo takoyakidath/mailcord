@@ -33,6 +33,7 @@ async function pollOneBinding(
   gmail: GmailClient,
   tokenEncryptionKey: string,
   poster: DiscordPoster,
+  spamChannelId: string,
   account: GmailAccount,
 ): Promise<void> {
   const binding = await resolveBindingById(db, account.bindingId);
@@ -70,15 +71,15 @@ async function pollOneBinding(
     }
 
     const senderAddress = extractEmailAddress(metadata.from);
-    if (await isSenderBlocked(db, senderAddress)) {
-      await markProcessed(db, gmailMessageId);
-      continue;
-    }
+    // Blocked senders are redirected to the spam channel (same as Resend inbound) rather than
+    // dropped, so a wrongly blocked sender is still visible.
+    const blocked = await isSenderBlocked(db, senderAddress);
 
-    const { discordMessageId } = await poster.postGmailMessage(binding.discordChannelId, {
+    const { discordMessageId } = await poster.postGmailMessage(blocked ? spamChannelId : binding.discordChannelId, {
       subject: metadata.subject,
       from: metadata.from,
       viewUrl: gmailViewUrl(metadata.id),
+      ...(blocked ? { flagReason: `ブロック済みの送信者です: ${senderAddress}` } : {}),
     });
 
     await recordThreadMessage(db, {
@@ -104,6 +105,7 @@ export async function pollAllGmailBindings(
   gmail: GmailClient,
   tokenEncryptionKey: string,
   poster: DiscordPoster,
+  spamChannelId: string,
 ): Promise<void> {
   const accounts = await listGmailAccounts(db);
   // One failing account (revoked consent, expired refresh token, transient API error) must
@@ -111,7 +113,7 @@ export async function pollAllGmailBindings(
   // isolation already used for Resend inbound.
   await Promise.allSettled(
     accounts.map((account) =>
-      pollOneBinding(db, gmail, tokenEncryptionKey, poster, account).catch(async (err) => {
+      pollOneBinding(db, gmail, tokenEncryptionKey, poster, spamChannelId, account).catch(async (err) => {
         if (isInvalidGrantError(err)) {
           // Dead refresh token: stop polling this account (retrying every tick only floods the
           // logs) and tell the channel once so the user knows to re-authorize.

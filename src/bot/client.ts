@@ -300,6 +300,9 @@ export function createDiscordPoster(client: Client): DiscordPoster {
         .setTitle(truncateForEmbed(params.subject || '(件名なし)'))
         .setURL(params.viewUrl)
         .setAuthor({ name: truncateForEmbed(params.from) });
+      if (params.flagReason) {
+        embed.setColor(0xed4245).addFields({ name: '⚠️ 検知理由', value: truncateForEmbed(params.flagReason) });
+      }
       const message = await channel.send({ embeds: [embed] });
       return { discordMessageId: message.id };
     },

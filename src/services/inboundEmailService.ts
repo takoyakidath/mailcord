@@ -32,7 +32,7 @@ export interface DiscordPoster {
   // edit could forget to check.
   postGmailMessage(
     channelId: string,
-    params: { subject: string; from: string; viewUrl: string },
+    params: { subject: string; from: string; viewUrl: string; flagReason?: string },
   ): Promise<{ discordMessageId: string }>;
   postSystemMessage(channelId: string, text: string): Promise<{ discordMessageId: string }>;
 }
