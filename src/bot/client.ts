@@ -14,6 +14,8 @@ import { handleBindCommand, handleUnbindCommand, handleListCommand } from './com
 import { handleBindGmailCommand } from './commands/gmailBindHandler';
 import { handleSendCommand } from './commands/sendHandler';
 import { handleBlockAddCommand, handleBlockRemoveCommand, handleBlockListCommand } from './commands/blockHandler';
+import { handleSpamChannelSetCommand, handleSpamChannelClearCommand, handleSpamChannelShowCommand } from './commands/spamChannelHandler';
+import { resolveSpamChannelId } from '../services/guildSettingsService';
 import { handleReportSpamCommand } from './commands/reportSpamHandler';
 import { REPORT_SPAM_COMMAND_NAME } from './commands/definitions';
 import { classifyIncomingMessage } from './replyDetection';
@@ -23,7 +25,7 @@ import { fetchAsBuffer } from '../util/fetchBuffer';
 const GENERIC_ERROR_REPLY = 'エラーが発生しました。もう一度お試しください。';
 const MANAGE_CHANNELS_REQUIRED = 'このコマンドにはチャンネル管理権限が必要です。';
 
-export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvider | null, spamChannelId: string): Client {
+export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvider | null, spamChannelId: string | undefined): Client {
   const providers: OutboundProviders = { resend, gmail };
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -42,6 +44,26 @@ export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvid
       // The OAuth link is personal to whoever ran the command and short-lived; every other
       // subcommand keeps today's non-ephemeral behavior.
       await interaction.deferReply({ ephemeral: sub === 'bind-gmail' });
+
+      if (group === 'spam-channel') {
+        if (sub !== 'show' && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+          await interaction.editReply(MANAGE_CHANNELS_REQUIRED);
+          return;
+        }
+        const guildId = interaction.guildId!;
+        const result =
+          sub === 'set'
+            ? await handleSpamChannelSetCommand(db, {
+                discordGuildId: guildId,
+                channelId: interaction.options.getChannel('channel')?.id ?? interaction.channelId,
+                requestedBy: interaction.user.id,
+              })
+            : sub === 'clear'
+              ? await handleSpamChannelClearCommand(db, { discordGuildId: guildId, requestedBy: interaction.user.id })
+              : await handleSpamChannelShowCommand(db, { discordGuildId: guildId, fallbackChannelId: spamChannelId });
+        await interaction.editReply(result.replyText);
+        return;
+      }
 
       if (group === 'block') {
         // Same policy as bind/unbind: adding/removing a block needs channel-management
@@ -205,7 +227,7 @@ export function createBotClient(db: Db, resend: ResendClient, gmail: GmailProvid
 async function handleReportSpamInteraction(
   interaction: MessageContextMenuCommandInteraction,
   db: Db,
-  spamChannelId: string,
+  fallbackSpamChannelId: string | undefined,
 ): Promise<void> {
   try {
     await interaction.deferReply({ ephemeral: true });
@@ -226,6 +248,11 @@ async function handleReportSpamInteraction(
 
     // Move the reported mail out of the bound channel: repost it in the spam channel, then delete
     // the original. Skipped when it is already there (e.g. reporting a forwarded blocked mail).
+    const spamChannelId = await resolveSpamChannelId(db, interaction.guildId!, fallbackSpamChannelId);
+    if (!spamChannelId) {
+      await interaction.editReply(`${result.replyText}\n(迷惑メールチャンネルが未設定のため、メッセージは移動していません。\`/mail spam-channel set\` で設定できます)`);
+      return;
+    }
     if (target.channelId !== spamChannelId) {
       const spamChannel = await interaction.client.channels.fetch(spamChannelId);
       if (!spamChannel || !(spamChannel instanceof TextChannel)) {

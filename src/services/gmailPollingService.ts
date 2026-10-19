@@ -6,6 +6,7 @@ import { processedGmailMessages } from '../db/schema';
 import { listGmailAccounts, updateHistoryCursor, getLiveAccessToken, isInvalidGrantError, markAccountRevoked, type GmailAccount } from './gmailAccountService';
 import { resolveBindingById } from './bindingService';
 import { recordThreadMessage } from './threadService';
+import { resolveSpamChannelId } from './guildSettingsService';
 import { isSenderBlocked } from './blocklistService';
 import { extractEmailAddress } from '../mail/address';
 
@@ -33,7 +34,7 @@ async function pollOneBinding(
   gmail: GmailClient,
   tokenEncryptionKey: string,
   poster: DiscordPoster,
-  spamChannelId: string,
+  fallbackSpamChannelId: string | undefined,
   account: GmailAccount,
 ): Promise<void> {
   const binding = await resolveBindingById(db, account.bindingId);
@@ -74,8 +75,9 @@ async function pollOneBinding(
     // Blocked senders are redirected to the spam channel (same as Resend inbound) rather than
     // dropped, so a wrongly blocked sender is still visible.
     const blocked = await isSenderBlocked(db, senderAddress);
+    const spamChannelId = blocked ? await resolveSpamChannelId(db, binding.discordGuildId, fallbackSpamChannelId) : null;
 
-    const { discordMessageId } = await poster.postGmailMessage(blocked ? spamChannelId : binding.discordChannelId, {
+    const { discordMessageId } = await poster.postGmailMessage(spamChannelId ?? binding.discordChannelId, {
       subject: metadata.subject,
       from: metadata.from,
       viewUrl: gmailViewUrl(metadata.id),
@@ -105,7 +107,7 @@ export async function pollAllGmailBindings(
   gmail: GmailClient,
   tokenEncryptionKey: string,
   poster: DiscordPoster,
-  spamChannelId: string,
+  fallbackSpamChannelId: string | undefined,
 ): Promise<void> {
   const accounts = await listGmailAccounts(db);
   // One failing account (revoked consent, expired refresh token, transient API error) must
@@ -113,7 +115,7 @@ export async function pollAllGmailBindings(
   // isolation already used for Resend inbound.
   await Promise.allSettled(
     accounts.map((account) =>
-      pollOneBinding(db, gmail, tokenEncryptionKey, poster, spamChannelId, account).catch(async (err) => {
+      pollOneBinding(db, gmail, tokenEncryptionKey, poster, fallbackSpamChannelId, account).catch(async (err) => {
         if (isInvalidGrantError(err)) {
           // Dead refresh token: stop polling this account (retrying every tick only floods the
           // logs) and tell the channel once so the user knows to re-authorize.

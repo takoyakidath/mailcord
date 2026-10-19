@@ -15,8 +15,9 @@ const envSchema = z
     RESEND_WEBHOOK_SECRET: z.string().min(1),
     DB_PATH: z.string().default('./data/mailcord.db'),
     PORT: z.coerce.number().default(8787),
-    // Blocked senders and spam-flagged mail are posted here instead of the bound channel.
-    SPAM_CHANNEL_ID: z.string().min(1),
+    // Optional fallback; the per-guild `/mail spam-channel set` setting takes priority.
+    // Blocked senders and spam-flagged mail are posted there instead of the bound channel.
+    SPAM_CHANNEL_ID: optionalString(z.string().min(1)),
     // Gmail bind is an add-on feature, not every deployment configures it — these are optional
     // as a group (see the .refine below), unlike the Resend vars above which are always required.
     GMAIL_CLIENT_ID: optionalString(z.string().min(1)),

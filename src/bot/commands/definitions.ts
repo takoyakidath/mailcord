@@ -1,5 +1,6 @@
 import {
   ApplicationCommandType,
+  ChannelType,
   ContextMenuCommandBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -47,6 +48,21 @@ export const mailCommand = new SlashCommandBuilder()
       .addStringOption((opt) => opt.setName('subject').setDescription('件名').setRequired(true))
       .addStringOption((opt) => opt.setName('body').setDescription('本文').setRequired(true))
       .addAttachmentOption((opt) => opt.setName('attachment').setDescription('添付ファイル').setRequired(false)),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('spam-channel')
+      .setDescription('迷惑メールの転送先チャンネル設定')
+      .addSubcommand((sub) =>
+        sub
+          .setName('set')
+          .setDescription('迷惑メールの転送先チャンネルを設定する(省略時はこのチャンネル)')
+          .addChannelOption((opt) =>
+            opt.setName('channel').setDescription('転送先チャンネル').addChannelTypes(ChannelType.GuildText).setRequired(false),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName('clear').setDescription('迷惑メールチャンネルの設定を解除する'))
+      .addSubcommand((sub) => sub.setName('show').setDescription('現在の迷惑メールチャンネルを表示する')),
   )
   .addSubcommandGroup((group) =>
     group

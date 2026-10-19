@@ -20,7 +20,7 @@ export function createServer(
   resend: ResendClient,
   poster: DiscordPoster,
   webhookSecret: string,
-  spamChannelId: string,
+  spamChannelId: string | undefined,
   gmail: GmailProvider | null,
 ): FastifyInstance {
   const app = Fastify({ logger: true });

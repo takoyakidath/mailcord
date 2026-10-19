@@ -34,7 +34,7 @@ cp .env.example .env
 | `RESEND_WEBHOOK_SECRET` | Resendのinbound webhook署名シークレット(`whsec_...`) |
 | `DB_PATH` | SQLiteファイルのパス(省略時 `./data/mailcord.db`) |
 | `PORT` | HTTPサーバーのポート(省略時 `8787`) |
-| `SPAM_CHANNEL_ID` | ブロック済み送信者・迷惑メール判定されたメールの転送先チャンネルID(必須) |
+| `SPAM_CHANNEL_ID` | (任意)迷惑メールチャンネルの既定値。通常は Discord 上で `/mail spam-channel set` を使う。サーバーごとの設定が優先される |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnelのトークン(Docker Compose利用時のみ必要。下記「5. デプロイ」参照) |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI` / `GMAIL_TOKEN_ENCRYPTION_KEY` | Gmail連携を使う場合のみ、4つすべて設定する(下記「Gmail連携」参照) |
 | `GMAIL_POLL_INTERVAL_MS` | Gmailの新着メールをポーリングする間隔・ミリ秒(省略時 `60000`) |
@@ -102,6 +102,8 @@ npm run typecheck  # 型チェック
 | `/mail block add address:<email>` | チャンネル管理権限 | 送信元アドレスをブロックする |
 | `/mail block remove address:<email>` | チャンネル管理権限 | ブロックを解除する |
 | `/mail block list` | 誰でも | ブロック中の送信者一覧を表示 |
+| `/mail spam-channel set [channel]` | チャンネル管理権限 | 迷惑メールの転送先を設定(省略時はこのチャンネル)。サーバーごとに1つ |
+| `/mail spam-channel clear` / `show` | clear: チャンネル管理権限 / show: 誰でも | 設定の解除 / 現在値の表示 |
 | 受信メールを右クリック → アプリ → `迷惑メールとして報告` | チャンネル管理権限 | 送信者をブロックし、そのメッセージを迷惑メールチャンネルへ移動する |
 | `/mail bind-gmail [permission]` | チャンネル管理権限 | このチャンネルを自分のGmailアカウントにバインドする(Google OAuth認可、下記「Gmail連携」参照)。`permission` は `読み取り専用`(デフォルト)か `読み取り+送信` |
 
@@ -137,10 +139,10 @@ npm run typecheck  # 型チェック
 
 本文や件名による自動の迷惑メール判定は行わない。迷惑メールの判定は人が行う:
 
-- 受信メールのメッセージを右クリック → アプリ → `迷惑メールとして報告` で、その送信者をブロックし、メッセージを `SPAM_CHANNEL_ID` のチャンネルへ移動する。
+- 受信メールのメッセージを右クリック → アプリ → `迷惑メールとして報告` で、その送信者をブロックし、メッセージを迷惑メールチャンネルへ移動する。
 - `/mail block add` で送信元アドレスを直接ブロックする。
 
-ブロック済み送信者からのResend経由の受信メールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` のチャンネルにembedで転送され、検知理由が併記される。Gmail由来の受信でも同様に、ブロック済み送信者のメールは `SPAM_CHANNEL_ID` のチャンネルへ(件名・送信者・リンクのみ)転送される。
+ブロック済み送信者からのResend経由の受信メールは、通常のバインド済みチャンネルではなく迷惑メールチャンネルにembedで転送され、検知理由が併記される。Gmail由来の受信でも同様に、ブロック済み送信者のメールは迷惑メールチャンネルへ(件名・送信者・リンクのみ)転送される。
 
 コンテキストメニューを追加・変更したら `npm run register-commands` でコマンドを再登録すること。
 

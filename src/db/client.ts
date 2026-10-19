@@ -40,6 +40,13 @@ function applySchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS guild_settings (
+      guild_id TEXT PRIMARY KEY,
+      spam_channel_id TEXT,
+      updated_by TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS email_threads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       discord_message_id TEXT NOT NULL UNIQUE,

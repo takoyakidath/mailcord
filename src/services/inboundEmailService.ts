@@ -1,3 +1,4 @@
+import { resolveSpamChannelId } from './guildSettingsService';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import type { ResendClient } from '../mail/resendClient';
@@ -72,7 +73,7 @@ export async function handleInboundEmail(
   resend: ResendClient,
   poster: DiscordPoster,
   emailId: string,
-  spamChannelId: string,
+  fallbackSpamChannelId: string | undefined,
 ): Promise<{ handled: boolean; reason?: string; filtered?: 'blocked' }> {
   if (await alreadyProcessed(db, emailId)) {
     return { handled: false, reason: `email ${emailId} was already processed` };
@@ -130,7 +131,8 @@ export async function handleInboundEmail(
   // Spam is only ever flagged by a human (the "迷惑メールとして報告" message context menu, or
   // /mail block), never by content heuristics — those misfired on ordinary mail.
   const blocked = await isSenderBlocked(db, senderAddress);
-  const targetChannelId = blocked ? spamChannelId : binding.discordChannelId;
+  const spamChannelId = blocked ? await resolveSpamChannelId(db, binding.discordGuildId, fallbackSpamChannelId) : null;
+  const targetChannelId = spamChannelId ?? binding.discordChannelId;
   const flagReason = blocked ? `ブロック済みの送信者です: ${senderAddress}` : undefined;
 
   const { discordMessageId } = await poster.postEmailMessage(targetChannelId, {

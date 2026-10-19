@@ -29,6 +29,15 @@ export const blockedSenders = sqliteTable('blocked_senders', {
   createdAt: text('created_at').notNull(),
 });
 
+// Per-guild settings. Currently just where blocked/spam mail is redirected, set with
+// `/mail spam-channel set`; SPAM_CHANNEL_ID in the env is only a fallback for guilds without one.
+export const guildSettings = sqliteTable('guild_settings', {
+  guildId: text('guild_id').primaryKey(),
+  spamChannelId: text('spam_channel_id'),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const emailThreads = sqliteTable('email_threads', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   discordMessageId: text('discord_message_id').notNull().unique(),
