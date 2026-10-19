@@ -2,6 +2,11 @@
   "name": "mailcord",
   "version": "1.0.0",
   "description": "Send/receive custom-domain email through Discord via Resend",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/takoyakidath/mailcord.git"
+  },
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {

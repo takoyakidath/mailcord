@@ -6,6 +6,7 @@ const validEnv = {
   DISCORD_APPLICATION_ID: 'app-id',
   RESEND_API_KEY: 're_key',
   RESEND_WEBHOOK_SECRET: 'whsec_abc',
+  SPAM_CHANNEL_ID: 'spam-chan',
 };
 
 describe('loadEnv', () => {
@@ -14,7 +15,7 @@ describe('loadEnv', () => {
     expect(env.DISCORD_BOT_TOKEN).toBe('token');
     expect(env.DB_PATH).toBe('./data/mailcord.db');
     expect(env.PORT).toBe(8787);
-    expect(env.SPAM_CHANNEL_ID).toBe('1554435622993661972');
+    expect(env.SPAM_CHANNEL_ID).toBe('spam-chan');
   });
 
   it('throws when a required var is missing', () => {

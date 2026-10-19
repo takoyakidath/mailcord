@@ -34,7 +34,7 @@ cp .env.example .env
 | `RESEND_WEBHOOK_SECRET` | Resendのinbound webhook署名シークレット(`whsec_...`) |
 | `DB_PATH` | SQLiteファイルのパス(省略時 `./data/mailcord.db`) |
 | `PORT` | HTTPサーバーのポート(省略時 `8787`) |
-| `SPAM_CHANNEL_ID` | ブロック済み送信者・迷惑メール判定されたメールの転送先チャンネルID(省略時 `1554435622993661972`) |
+| `SPAM_CHANNEL_ID` | ブロック済み送信者・迷惑メール判定されたメールの転送先チャンネルID(必須) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnelのトークン(Docker Compose利用時のみ必要。下記「5. デプロイ」参照) |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI` / `GMAIL_TOKEN_ENCRYPTION_KEY` | Gmail連携を使う場合のみ、4つすべて設定する(下記「Gmail連携」参照) |
 | `GMAIL_POLL_INTERVAL_MS` | Gmailの新着メールをポーリングする間隔・ミリ秒(省略時 `60000`) |
@@ -140,9 +140,17 @@ npm run typecheck  # 型チェック
 - 受信メールのメッセージを右クリック → アプリ → `迷惑メールとして報告` で、その送信者をブロックし、メッセージを `SPAM_CHANNEL_ID` のチャンネルへ移動する。
 - `/mail block add` で送信元アドレスを直接ブロックする。
 
-ブロック済み送信者からのResend経由の受信メールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` のチャンネルにembedで転送され、検知理由が併記される。Gmail由来の受信ではブロック済み送信者のメールは投稿されない。
+ブロック済み送信者からのResend経由の受信メールは、通常のバインド済みチャンネルではなく `SPAM_CHANNEL_ID` のチャンネルにembedで転送され、検知理由が併記される。Gmail由来の受信でも同様に、ブロック済み送信者のメールは `SPAM_CHANNEL_ID` のチャンネルへ(件名・送信者・リンクのみ)転送される。
 
 コンテキストメニューを追加・変更したら `npm run register-commands` でコマンドを再登録すること。
+
+## セルフホストについて
+
+mailcord は各自がホストして使う前提のBotです。公開インスタンスはありません。自分のDiscord Bot・Resendアカウント・独自ドメインを用意し、上記の手順でデプロイしてください。`.env` やトークンは絶対にコミットしないこと。
+
+## ライセンス
+
+[MIT](./LICENSE)
 
 ## スコープ外(v1)
 

@@ -9,6 +9,7 @@ services:
       - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
       - DB_PATH=/app/data/mailcord.db
       - PORT=8787
+      - SPAM_CHANNEL_ID=${SPAM_CHANNEL_ID}
       - NODE_OPTIONS=--dns-result-order=ipv4first
       # Optional: leave unset in .env to keep Gmail bind disabled (env.ts treats a blank
       # substitution the same as an absent var).
