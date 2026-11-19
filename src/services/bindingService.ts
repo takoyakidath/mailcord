@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { addressBindings, gmailAccounts } from '../db/schema';
+import { addressBindings, emailThreads, gmailAccounts } from '../db/schema';
 
 export type Binding = typeof addressBindings.$inferSelect;
 
@@ -37,6 +37,10 @@ export async function removeBinding(db: Db, discordChannelId: string): Promise<b
   // No-op for a Resend binding; for a Gmail binding this drops its OAuth tokens so the next
   // polling tick simply stops seeing this binding (no separate "stop polling" signal needed).
   await db.delete(gmailAccounts).where(eq(gmailAccounts.bindingId, existing.id));
+  // email_threads.binding_id references address_bindings with no ON DELETE CASCADE, so a
+  // binding that has any thread history cannot be deleted until its thread rows go first —
+  // otherwise the delete fails with a FOREIGN KEY constraint error and the binding is stuck.
+  await db.delete(emailThreads).where(eq(emailThreads.bindingId, existing.id));
   await db.delete(addressBindings).where(eq(addressBindings.discordChannelId, discordChannelId));
   return true;
 }

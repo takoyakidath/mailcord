@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createDb, type Db } from '../../src/db/client';
-import { gmailAccounts } from '../../src/db/schema';
+import { emailThreads, gmailAccounts } from '../../src/db/schema';
 import {
   createBinding,
   removeBinding,
@@ -98,5 +98,28 @@ describe('bindingService', () => {
 
     expect(await removeBinding(db, 'chan-1')).toBe(true);
     expect(await db.select().from(gmailAccounts).where(eq(gmailAccounts.bindingId, binding.id))).toEqual([]);
+  });
+
+  it('removing a binding also deletes its email_threads rows (FK constraint)', async () => {
+    const binding = await createBinding(db, {
+      emailAddress: 'tako@gmail.com',
+      discordGuildId: 'g1',
+      discordChannelId: 'chan-1',
+      createdBy: 'u1',
+      provider: 'gmail',
+    });
+    await db.insert(emailThreads).values({
+      discordMessageId: 'msg-1',
+      bindingId: binding.id,
+      externalAddress: 'someone@example.com',
+      subject: 'hello',
+      emailMessageId: '<m1@example.com>',
+      direction: 'inbound',
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(await removeBinding(db, 'chan-1')).toBe(true);
+    expect(await resolveBindingByChannel(db, 'chan-1')).toBeNull();
+    expect(await db.select().from(emailThreads).where(eq(emailThreads.bindingId, binding.id))).toEqual([]);
   });
 });
