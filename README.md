@@ -123,8 +123,9 @@ npm run typecheck  # 型チェック
 
 **権限(permission):**
 
-- `/mail bind-gmail` はデフォルトで **読み取り専用**(`gmail.readonly` のみをGoogleに要求)。この場合トークン自体に送信権限が無く、Gmailバインドのチャンネルからは返信も `/mail send` もできない。
-- 送信したい場合のみ `/mail bind-gmail permission:読み取り+送信` を使う(`gmail.send` も要求する)。
+- このブランチ(`gmail-metadata-only`、仕事用)では `/mail bind-gmail` はデフォルトで **タイトルだけ読み取り**(`gmail.metadata` のみをGoogleに要求)。このスコープではGoogle側で本文・添付ファイルの取得自体が拒否されるため、サーバーが侵害されても本文は読めない。この場合トークン自体に送信権限も無く、Gmailバインドのチャンネルからは返信も `/mail send` もできない。
+- 送信したい場合のみ `/mail bind-gmail permission:読み取り+送信` を使う(`gmail.send` も要求する。読み取り側は引き続き `gmail.metadata` のみ)。
+- 注意: `gmail.metadata` では Gmail API の検索クエリ(`q`)は使えない。本実装のポーリングは History API + `format=metadata` のみを使うため影響しない。
 - 権限を変えるには `/mail unbind` してから再バインドする。古い許可はGoogleアカウントの「サードパーティのアクセス」から削除しておくと確実。
 - この機能の導入前にバインドされたアカウントは `gmail.send` を許可済みのため、`読み取り+送信` として扱われる。
 

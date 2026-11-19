@@ -18,19 +18,21 @@ describe('gmailClient', () => {
 
   const client = createGmailClient('client-id', 'client-secret', 'https://example.com/oauth/gmail/callback');
 
-  it('buildAuthUrl for read_only requests only the readonly scope', () => {
+  it('buildAuthUrl for read_only requests only the metadata scope', () => {
     const url = new URL(client.buildAuthUrl('state-123', 'read_only'));
-    expect(url.searchParams.get('scope')).toContain('gmail.readonly');
+    expect(url.searchParams.get('scope')).toContain('gmail.metadata');
     expect(url.searchParams.get('scope')).not.toContain('gmail.send');
+    expect(url.searchParams.get('scope')).not.toContain('gmail.readonly');
   });
 
-  it('buildAuthUrl for read_send requests the readonly+send scopes and offline access', () => {
+  it('buildAuthUrl for read_send requests the metadata+send scopes and offline access', () => {
     const url = new URL(client.buildAuthUrl('state-123', 'read_send'));
     expect(url.searchParams.get('access_type')).toBe('offline');
     expect(url.searchParams.get('prompt')).toBe('consent');
     expect(url.searchParams.get('state')).toBe('state-123');
-    expect(url.searchParams.get('scope')).toContain('gmail.readonly');
+    expect(url.searchParams.get('scope')).toContain('gmail.metadata');
     expect(url.searchParams.get('scope')).toContain('gmail.send');
+    expect(url.searchParams.get('scope')).not.toContain('gmail.readonly');
     expect(url.searchParams.get('scope')).not.toContain('mail.google.com');
   });
 
