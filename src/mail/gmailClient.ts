@@ -30,14 +30,17 @@ export interface GmailClient {
   sendRawMessage(accessToken: string, raw: Buffer, threadId?: string): Promise<{ id: string; threadId: string }>;
 }
 
-// Least-privilege scopes: readonly (metadata polling never requests format=full/raw, see
-// getMessageMetadata below), plus send only when the user opts in at bind time. Deliberately not
-// the broad `https://mail.google.com/` scope.
-const READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+// Least-privilege scopes (work / title-only branch): gmail.metadata only, plus send only when
+// the user opts in at bind time. gmail.metadata lets Google itself enforce the title-only
+// boundary — the token can read message headers/labels and history, but can never retrieve a
+// message body or attachment, no matter what this code requests. Deliberately not
+// gmail.readonly (which would technically permit fetching bodies) and not the broad
+// `https://mail.google.com/` scope.
+const METADATA_SCOPE = 'https://www.googleapis.com/auth/gmail.metadata';
 const SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 const SCOPES_BY_PERMISSION: Record<GmailPermission, string[]> = {
-  read_only: [READONLY_SCOPE],
-  read_send: [READONLY_SCOPE, SEND_SCOPE],
+  read_only: [METADATA_SCOPE],
+  read_send: [METADATA_SCOPE, SEND_SCOPE],
 };
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const METADATA_HEADERS = ['Subject', 'From', 'Message-ID', 'In-Reply-To', 'References'];
@@ -149,10 +152,11 @@ export function createGmailClient(clientId: string, clientSecret: string, redire
     async getMessageMetadata(accessToken, messageId) {
       const params = new URLSearchParams({ format: 'metadata' });
       for (const header of METADATA_HEADERS) params.append('metadataHeaders', header);
-      // format=metadata + an explicit metadataHeaders allowlist is what keeps the message body
-      // out of this process entirely — never request format=full/raw here. That's the actual
-      // privacy boundary for "Gmail-sourced Discord embeds carry no body text" (the readonly
-      // scope itself would technically permit fetching bodies too).
+      // format=metadata + an explicit metadataHeaders allowlist keeps the message body out of
+      // this process — never request format=full/raw here. On this branch the gmail.metadata
+      // scope is the hard privacy boundary: Google rejects body requests for this token even
+      // if this code ever asked, so "Gmail-sourced Discord embeds carry no body text" is
+      // enforced by the OAuth grant itself, not just by this call site.
       const data = await gmailFetch<{
         id: string;
         threadId: string;

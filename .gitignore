@@ -5,3 +5,6 @@ data/
 *.swp
 *.swo
 *~
+
+# local database backups
+*.db.bak
